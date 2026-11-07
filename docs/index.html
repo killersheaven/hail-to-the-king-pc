@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hail to the King PC</title>
+<meta name="description" content="An unofficial native PC recompilation of Evil Dead: Hail to the King (Dreamcast, 2000). Build it from your own disc.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=EB+Garamond:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0b0c; --panel: #171214; --line: #2c2124; --text: #e8e2d8; --muted: #a39b91;
+    --red: #c8352b; --red-hi: #e0453b; --link: #f0a49c;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 "EB Garamond", Georgia, serif; }
+  a { color: var(--link); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--line); background: radial-gradient(ellipse at 50% -40%, #3a1412 0%, var(--bg) 70%); }
+  header .wrap { padding-top: 64px; padding-bottom: 48px; }
+  .kicker { font: 700 13px/1 "Courier Prime", monospace; letter-spacing: .18em; text-transform: uppercase; color: var(--red-hi); }
+  h1 { font-size: clamp(34px, 7vw, 58px); line-height: 1.05; margin: 14px 0 16px; letter-spacing: -.01em; }
+  .lede { font-size: 20px; color: var(--text); max-width: 640px; margin: 0; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+  .btn { font: 700 15px/1 "Courier Prime", monospace; text-decoration: none; padding: 14px 20px; border: 1px solid var(--red); color: var(--text); }
+  .btn.primary { background: var(--red); border-color: var(--red); }
+  .btn:hover { border-color: var(--red-hi); }
+  .btn.primary:hover { background: var(--red-hi); }
+  .note { margin-top: 18px; font: 14px/1.5 "Courier Prime", monospace; color: var(--muted); }
+  section { padding: 44px 0; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 28px; margin: 0 0 18px; }
+  h2::before { content: ""; display: inline-block; width: 10px; height: 10px; background: var(--red); margin-right: 12px; vertical-align: middle; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); padding: 16px 18px; }
+  .card b { display: block; font: 700 14px/1.3 "Courier Prime", monospace; color: var(--text); margin-bottom: 6px; letter-spacing: .02em; }
+  .card span { color: var(--muted); font-size: 16px; }
+  ol { padding-left: 22px; } ol li { margin: 8px 0; }
+  code, pre { font-family: "Courier Prime", monospace; font-size: 15px; }
+  code { background: var(--panel); padding: 1px 6px; border: 1px solid var(--line); }
+  pre { background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; overflow-x: auto; }
+  pre code { background: none; border: 0; padding: 0; }
+  .muted { color: var(--muted); }
+  footer { padding: 32px 0 48px; color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="kicker">Unofficial PC recompilation · v0.14.0</div>
+    <h1>Evil Dead: Hail to the King</h1>
+    <p class="lede">The 2000 Dreamcast game, running natively on Windows and Linux. The game's own program is translated to C and runs on a rebuilt Dreamcast: graphics, sound, controllers and memory card.</p>
+    <div class="cta">
+      <a class="btn primary" href="#" data-gh="/releases/latest">Download v0.14.0</a>
+      <a class="btn" href="#" data-gh="">Source code</a>
+    </div>
+    <p class="note">No game data is included. You build it from your own disc image.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>What's in it</h2>
+    <div class="grid">
+      <div class="card"><b>Modern displays</b><span>Fullscreen at your monitor's resolution, window or stretch, sharp or smooth textures, sharpened menus.</span></div>
+      <div class="card"><b>Controls</b><span>Keyboard or any modern controller, plugged in before you start.</span></div>
+      <div class="card"><b>Your keys</b><span>Rebind every Dreamcast button to the keys you want in the options window.</span></div>
+      <div class="card"><b>Button prompts</b><span>Dreamcast, Xbox, PlayStation or Switch icons in the menus.</span></div>
+      <div class="card"><b>Save slots</b><span>The memory card is emulated; the save screens talk about slots, not VMUs and blocks.</span></div>
+      <div class="card"><b>Extras</b><span>Read all 17 documents, watch the 56 Sofdec cutscenes and turn 35 character models in their rest pose, all straight from your disc.</span></div>
+      <div class="card"><b>Model capture</b><span>Press F8 in game to save the 3D models on screen as OBJ files with textures.</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Build it on Windows</h2>
+    <p>You need your own copy of the game as a Redump-style <code>.cue</code> + <code>.bin</code> set (USA release), Windows 10 or 11, and about 1.5 GB of space.</p>
+    <ol>
+      <li>Download the <a href="#" data-gh="/releases/latest">latest release</a> and unzip it.</li>
+      <li>Double-click <code>build.bat</code> and pick your disc's <code>.cue</code> if it asks.</li>
+      <li>Wait 15–30 minutes the first time: it downloads the build tools from their official pages, reads the program from your disc, translates and compiles it.</li>
+      <li>Open the new <code>pc-build</code> folder and start <code>launcher.bat</code>.</li>
+    </ol>
+    <p class="muted">On Linux:</p>
+    <pre><code>./build.sh "/path/to/Evil Dead - Hail to the King (USA).cue"</code></pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p>A recompiler finds the roughly 6,000 functions in the game's SH-4 program and translates every instruction to C. The runtime stands in for the Dreamcast hardware: the PowerVR2 graphics chip (drawn with OpenGL), the AICA sound chip and its ARM7 CPU, the controller bus and memory card, the GD-ROM drive reading your disc image, and the BIOS. The <a href="#" data-gh="/blob/main/games/hail-to-the-king/TECHNICAL_NOTES.md">technical notes</a> cover the details and what was learned about the game along the way, including its model and texture formats.</p>
+    <p class="muted">Still to do: the HD font and logo, sound reverb, save slots 3–8, the AVI movies, model animations, Android.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 Killers' Heaven · free software under the <a href="#" data-gh="/blob/main/LICENSE">GNU GPL v3</a>.</p>
+    <p>A fan project, not affiliated with or endorsed by THQ, Heavy Iron Studios or the owners of <i>Evil Dead</i>. <i>Evil Dead</i> and its related characters are trademarks of their respective owners. <i>Evil Dead: Hail to the King</i> © 2000 THQ Inc.</p>
+  </div>
+</footer>
+<script>
+  // links to the repository, worked out from the Pages address (owner.github.io/repo/)
+  (function () {
+    var owner = location.hostname.split('.')[0], repo = location.pathname.split('/')[1] || '';
+    var base = 'https://github.com/' + owner + '/' + repo;
+    document.querySelectorAll('[data-gh]').forEach(function (a) { a.href = base + a.getAttribute('data-gh'); });
+  })();
+</script>
+</body>
+</html>

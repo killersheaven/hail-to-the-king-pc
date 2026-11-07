@@ -1,0 +1,25 @@
+# build tools downloaded by build.ps1
+.tools/
+# outputs
+pc-build/
+pc-build-linux/
+games/*/build/
+games/*/captures/
+# anything read from the player's disc
+games/*/orig/
+games/*/notes/overlays/
+games/*/notes/funcs.json
+games/*/notes/gaps.json
+games/*/notes/jumptables.json
+games/*/notes/modules.json
+games/*/notes/func_strings.json
+*.cue
+*.bin
+*.BIN
+*.gdi
+*.chd
+# per-player files
+settings.ini
+vmu_*.bin
+log.txt
+__pycache__/
