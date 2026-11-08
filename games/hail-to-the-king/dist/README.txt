@@ -1,4 +1,4 @@
-Evil Dead: Hail to the King - unofficial PC recompilation, v0.14.0
+Evil Dead: Hail to the King - unofficial PC recompilation, v0.15.0
 (c) 2026 Killers' Heaven - free software under the GNU GPL v3 (LICENSE.txt)
 
 This folder was built on your computer from your own disc. Start:

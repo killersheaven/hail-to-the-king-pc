@@ -7,7 +7,7 @@ a reimplementation of the Dreamcast's graphics, sound and controller hardware.
 **No game data is included.** You build the game on your own computer from your own disc image,
 and it reads everything (models, sound, movies) from that disc while it runs.
 
-Current version: **v0.14.0** — see [CHANGELOG.md](CHANGELOG.md).
+Current version: **v0.15.0** — see [CHANGELOG.md](CHANGELOG.md).
 
 ## What you get
 

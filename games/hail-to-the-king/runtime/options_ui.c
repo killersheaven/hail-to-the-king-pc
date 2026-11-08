@@ -257,7 +257,7 @@ static int wrap(int sz, const char *s, float w, char lines[][96], int maxl) {
     return n;
 }
 #ifndef HTTK_VERSION
-#define HTTK_VERSION "0.14.0"
+#define HTTK_VERSION "0.15.0"
 #endif
 static const char *about_text =
     "Evil Dead: Hail to the King (Dreamcast, 2000) by Heavy Iron Studios and THQ, "
