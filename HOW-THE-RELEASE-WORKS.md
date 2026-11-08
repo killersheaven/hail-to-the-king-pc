@@ -85,7 +85,7 @@ used a new folder.
 | Testing cheats | Works |
 | Documents viewer | Works |
 | F8 model capture, F12 screenshots | Works |
-| HD art | Partly: only the HD legal screen so far; no HD font or title logo yet |
+| HD art: HD font and legal screen | Works (the title screen keeps its original art) |
 | Cutscene viewer | Partly: the 56 Sofdec movies play; the 62 AVI movies don't yet |
 | Model viewer | Partly: 35 characters in their rest pose; no animations yet |
 | Save slots 3–8, sound reverb, Android | Not yet |

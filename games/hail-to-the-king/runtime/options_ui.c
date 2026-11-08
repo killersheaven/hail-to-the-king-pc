@@ -107,7 +107,7 @@ static const char *row_help[NROWS][2] = {
 /* what each option does in this release: 0 works, 1 partly, 2 not yet */
 static const struct { int lvl; const char *text; } row_status[NROWS] = {
     { 0, "Works." }, { 0, "Works." }, { 0, "Works." }, { 0, "Works." }, { 0, "Works." }, { 0, "Works." },
-    { 1, "Partly: only the HD legal screen so far (no HD font or logo yet)." },
+    { 0, "Works: HD font and legal screen. The title screen keeps its original art." },
     { 0, "Works." },
     { 0, "Works." },
     { 0, "Works." },

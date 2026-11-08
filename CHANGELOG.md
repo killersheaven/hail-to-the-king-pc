@@ -19,7 +19,8 @@ Everything from the 14 test builds, now built from your own disc:
 - Every option and Extras item shows whether it works, partly works or isn't done yet
 - Fixes: freezes from masked interrupts, cut-off menu text and buttons, the legal screen flashing while skipping movies
 
+- HD font: the game's font is redrawn at 4x with Courier Prime while the game runs, so no game art is stored
 - The start-up legal screen redrawn in high resolution, with the line "Unofficial PC recompilation © 2026 Killers' Heaven."
 
-Not in this release: the HD font from the test builds (it will return with a pack builder that
-works from your disc), sound reverb, save slots 3–8, AVI movies.
+Not in this release: the HD title-screen art from the test builds (it's the game's own art and
+logos), sound reverb, save slots 3–8, AVI movies.

@@ -280,9 +280,9 @@ static uint32_t cur_tex_addr;
 /* Button prompts without an image pack: paint the controller's icons (textures/prompts/<style>/icons.png,
  * four 18x24 cells at 4x, see tools/fontpack/prompticons.py) over the icon row of the game's own font
  * sheet (y 144-168, cells Y B A X) as it is uploaded. */
-static void prompt_patch(uint32_t *px, uint32_t w) {
+static const uint8_t *prompt_icons(int st) {
     static uint8_t *icons[4]; static int tried[4];
-    int st = opt_prompts & 3; if (!st || w != 256) return;
+    if (!st) return NULL;
     if (!tried[st]) {
         tried[st] = 1; char p[1024]; int iw, ih, n;
         snprintf(p, sizeof p, "%s/prompts/%s/icons.png", pack_dir ? pack_dir : "textures", prompt_dir[st]);
@@ -290,7 +290,11 @@ static void prompt_patch(uint32_t *px, uint32_t w) {
         if (icons[st] && (iw != 288 || ih != 96)) { stbi_image_free(icons[st]); icons[st] = NULL; }
         fprintf(stderr, "[prompts] %s %s\n", p, icons[st] ? "loaded" : "missing");
     }
-    const uint8_t *ic = icons[st]; if (!ic) return;
+    return icons[st];
+}
+static void prompt_patch(uint32_t *px, uint32_t w) {
+    if (w != 256) return;
+    const uint8_t *ic = prompt_icons(opt_prompts & 3); if (!ic) return;
     for (int y = 0; y < 24; y++) for (int x = 0; x < 76; x++) {
         uint32_t t = 0;
         if (x < 72) {   /* 4x4 box average of the alpha */
@@ -327,6 +331,16 @@ static int texpack_upload(uint32_t *px, uint32_t w, uint32_t h, uint32_t updates
             p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rw, rh, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
             stbi_image_free(img); texpack_loaded++; last_upload_hd = rw > (int)w;
             static int logged; if (logged++ < 20) fprintf(stderr, "[texpack] replaced %s with %dx%d\n", name, rw, rh);
+            return 1;
+        }
+    }
+    if (is_font && opt_hd && !getenv("DC_NOHDFONT")) {   /* no HD sheet file: draw the HD font now (hdfont.c) */
+        uint32_t *hdfont_build(const uint32_t *px, const uint8_t *icons4x);
+        uint32_t *hf = hdfont_build(px, prompt_icons(opt_prompts & 3));
+        if (hf) {
+            p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1024, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, hf);
+            free(hf); last_upload_hd = 1;
+            static int logged; if (!logged++) fprintf(stderr, "[hdfont] font sheet redrawn at 1024x1024\n");
             return 1;
         }
     }

@@ -5,7 +5,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 file(GLOB GEN_SRC ${CMAKE_SOURCE_DIR}/build/gen/*.c)
-add_executable(hail-to-the-king runtime/runtime.c runtime/hw.c runtime/bios_hle.c runtime/disc.c runtime/pvr.c runtime/dma.c runtime/maple.c runtime/aica.c runtime/aica_synth.c runtime/arm7.c runtime/coro.c runtime/interp.c runtime/render_gl.c runtime/upscale.c runtime/png.c runtime/textpatch.c runtime/iso9660.c runtime/sfd.c runtime/models.c ${GEN_SRC})
+add_executable(hail-to-the-king runtime/runtime.c runtime/hw.c runtime/bios_hle.c runtime/disc.c runtime/pvr.c runtime/dma.c runtime/maple.c runtime/aica.c runtime/aica_synth.c runtime/arm7.c runtime/coro.c runtime/interp.c runtime/render_gl.c runtime/upscale.c runtime/png.c runtime/textpatch.c runtime/iso9660.c runtime/sfd.c runtime/models.c runtime/hdfont.c ${GEN_SRC})
 target_include_directories(hail-to-the-king PRIVATE runtime build/gen)
 # the SH-4 code relies on wrapping 32-bit arithmetic and type punning
 target_compile_options(hail-to-the-king PRIVATE -fwrapv -fno-strict-aliasing -Wno-unused-variable -Wno-unused-label -Wno-tautological-compare)

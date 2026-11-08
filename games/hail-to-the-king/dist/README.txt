@@ -26,8 +26,8 @@ OPTIONS (options.bat, or settings.ini)
   stretch, texture filtering (smooth / sharp), menu sharpening, button
   prompts (Dreamcast, Xbox, PlayStation, Switch), keyboard controls, testing
   cheats (immortality, unlimited ammo, unlimited chainsaw
-  fuel, Damascene blade - all off by default).
-  Partly: HD art (only the HD legal screen so far).
+  fuel, Damascene blade - all off by default), HD art (an HD font drawn
+  while the game runs, and the HD legal screen).
 
 SAVING
   The memory card is emulated: Save Slot 1 = vmu_a1.bin, Save Slot 2 =
@@ -44,8 +44,7 @@ EXTRAS (launcher.bat)
 
 KNOWN GAPS
   No reverb / echo in the sound yet. Save slots 3-8 are greyed out. The
-  HD font and the HD title logo aren't in
-  this release yet. See HOW-THE-RELEASE-WORKS.md in the project folder for
+  title screen keeps its original art. See HOW-THE-RELEASE-WORKS.md in the project folder for
   the full list.
 
 If the screen stays black or the game closes at once, send log.txt from this

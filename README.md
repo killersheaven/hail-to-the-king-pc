@@ -20,7 +20,7 @@ Current version: **v0.14.0** — see [CHANGELOG.md](CHANGELOG.md).
   - **Cutscenes**: the game's 56 Sofdec movies with sound (*partial: the 62 AVI movies don't play yet*)
   - **Models**: 35 characters and creatures, read straight from the disc's data files (*partial: rest pose only*)
 - **F8 model capture**: saves the 3D models on screen as OBJ + textures
-- The start-up legal screen redrawn in high resolution, with the port's credit line (the only HD image so far)
+- An HD font, drawn while the game runs from Courier Prime (no game art is stored), and the start-up legal screen redrawn in high resolution with the port's credit line
 - Optional testing cheats (immortality, unlimited ammo and fuel, Damascene blade)
 
 ## What you need
@@ -60,7 +60,7 @@ for the details and for undocumented findings about the game (data formats, RAM 
 
 ## Status and known gaps
 
-The game boots, plays, saves and loads. Not done yet: the HD font and title logo, sound reverb/echo (the AICA DSP), save
+The game boots, plays, saves and loads. Not done yet: sound reverb/echo (the AICA DSP), save
 slots 3–8, the disc's AVI (TrueMotion) movies, model animations, and an Android version. The full
 list is in [How the release works](HOW-THE-RELEASE-WORKS.md#what-works-in-this-version).
 
