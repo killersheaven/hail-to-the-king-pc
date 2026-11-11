@@ -4,8 +4,10 @@
  *   DC_NOGL=1         no GL at all (fast runs; display lists are still parsed) */
 #include "platform.h"
 #include "render_gl.h"
+#ifndef DC_NO_EGL
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,7 +15,9 @@ int png_write(const char *path, const uint8_t *rgba, int w, int h, int bottom_up
 static int shot_every; static const char *shot_dir = ".";
 static uint32_t renders;
 
+#ifndef DC_NO_EGL
 static void *getproc(const char *n) { return (void *)eglGetProcAddress(n); }
+#endif
 
 void platform_notice(const char *msg) { fprintf(stderr, "[headless] %s\n", msg); }
 static void on_render(const pvr_frame *f) {
@@ -47,6 +51,9 @@ static void on_render(const pvr_frame *f) {
 int platform_init(int argc, char **argv) {
     (void)argc; (void)argv;
     if (getenv("DC_NOGL")) return 1;
+#ifdef DC_NO_EGL
+    return 1;                                  /* built without EGL (e.g. ARM64 tests under an emulator) */
+#else
     if (getenv("DC_SHOT_EVERY")) shot_every = atoi(getenv("DC_SHOT_EVERY"));
     if (getenv("DC_SHOTDIR")) shot_dir = getenv("DC_SHOTDIR");
     PFNEGLGETPLATFORMDISPLAYEXTPROC gpd = (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
@@ -68,6 +75,7 @@ int platform_init(int argc, char **argv) {
     pvr_set_renderer(on_render);
     if (getenv("DC_RES")) { int w = 0, h = 0; if (sscanf(getenv("DC_RES"), "%dx%d", &w, &h) == 2) render_gl_resize(w, h); }
     return 1;
+#endif
 }
 void platform_vblank(void) {}
 void platform_shutdown(void) {}

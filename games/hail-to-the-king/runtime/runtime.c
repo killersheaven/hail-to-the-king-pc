@@ -270,7 +270,14 @@ extern uint64_t sq_flushes, sq_ta_flushes;
 void hw_sq_flush(uint32_t a);
 void sh4_sq_flush(sh4ctx *c, uint32_t a) { (void)c; hw_sq_flush(a); }
 
+#ifdef __ANDROID__
+#include <SDL2/SDL_main.h>                   /* SDL's Java side calls SDL_main */
+void android_prepare(int *argc, char ***argv);   /* platform_sdl.c: app folder, disc, assets */
+#endif
 int main(int argc, char **argv) {
+#ifdef __ANDROID__
+    android_prepare(&argc, &argv);
+#endif
     /* hail-to-the-king <disc.cue>                 (the program is read from the disc)
      * hail-to-the-king <1ST_READ.BIN> <disc.cue | folder>   (development) */
     const char *a1 = argc > 1 && argv[1][0] != '-' ? argv[1] : "1ST_READ.BIN";

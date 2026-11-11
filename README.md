@@ -48,6 +48,14 @@ Install `python3`, `cmake`, `ninja` (or `make`), `clang` or `gcc`, and the SDL2 
 
 The game ends up in `pc-build-linux/` (start `launcher.sh`).
 
+## Android (early test)
+
+Double-click **`build-android.bat`** instead. It does the same steps, then compiles for 64-bit
+Android phones and packages an app (`android-build/hail-to-the-king.apk`). The first run also
+downloads Java and Google's Android tools (about 3 GB). Install the app on your phone, copy your
+disc image into the app's folder from your PC, and play with a Bluetooth or USB controller (no
+touch controls yet). Step by step: [README-android.txt](games/hail-to-the-king/dist/README-android.txt).
+
 ## How it works
 
 `tools/extract_disc.py` copies the game's program (`1ST_READ.BIN`) out of your disc image.
@@ -61,7 +69,7 @@ for the details and for undocumented findings about the game (data formats, RAM 
 ## Status and known gaps
 
 The game boots, plays, saves and loads. Not done yet: sound reverb/echo (the AICA DSP), save
-slots 3–8, the disc's AVI (TrueMotion) movies, model animations, and an Android version. The full
+slots 3–8, the disc's AVI (TrueMotion) movies, model animations, and touch controls on Android. The full
 list is in [How the release works](HOW-THE-RELEASE-WORKS.md#what-works-in-this-version).
 
 ## Legal

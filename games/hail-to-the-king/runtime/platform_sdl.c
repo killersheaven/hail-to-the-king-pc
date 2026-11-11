@@ -47,7 +47,61 @@ static void audio_pump(void) {
     }
 }
 
+#ifdef __ANDROID__
+#include <dlfcn.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <dirent.h>
+static void *getproc(const char *n) {        /* Android's EGL may not hand out core GLES 3 functions */
+    static void *gles; if (!gles) gles = dlopen("libGLESv3.so", RTLD_NOW);
+    void *p = gles ? dlsym(gles, n) : NULL;
+    return p ? p : SDL_GL_GetProcAddress(n);
+}
+/* Before anything else on Android: work in the app's own folder on shared storage
+ * (Android/data/<app>/files, reachable from a PC over USB), copy the bundled textures
+ * there once, log to log.txt, and find the disc (.cue + .bin) the player copied in. */
+static const char *android_assets[] = { "textures/33522E637940C0F6_512x256.png",
+    "textures/prompts/dreamcast/icons.png", "textures/prompts/xbox/icons.png",
+    "textures/prompts/playstation/icons.png", "textures/prompts/switch/icons.png", NULL };
+static void copy_asset(const char *name) {
+    struct stat st; if (stat(name, &st) == 0) return;
+    SDL_RWops *in = SDL_RWFromFile(name, "rb"); if (!in) return;          /* reads the APK's assets */
+    char dir[512]; snprintf(dir, sizeof dir, "%s", name);
+    for (char *p = dir; *p; p++) if (*p == '/') { *p = 0; mkdir(dir, 0755); *p = '/'; }
+    FILE *out = fopen(name, "wb");
+    if (out) { char buf[65536]; size_t n; while ((n = SDL_RWread(in, buf, 1, sizeof buf)) > 0) fwrite(buf, 1, n, out); fclose(out); }
+    SDL_RWclose(in);
+}
+static int find_cue(const char *dir, char *out, size_t n) {
+    DIR *d = opendir(dir); if (!d) return 0;
+    struct dirent *e; int found = 0;
+    while (!found && (e = readdir(d))) {
+        size_t l = strlen(e->d_name);
+        if (l > 4 && !SDL_strcasecmp(e->d_name + l - 4, ".cue")) { snprintf(out, n, "%s/%s", dir, e->d_name); found = 1; }
+    }
+    closedir(d); return found;
+}
+void android_prepare(int *argc, char ***argv) {
+    const char *home = SDL_AndroidGetExternalStoragePath();
+    if (home) { mkdir(home, 0755); if (chdir(home) != 0) home = NULL; }
+    freopen("log.txt", "w", stderr); setvbuf(stderr, NULL, _IOLBF, 0);
+    for (int i = 0; android_assets[i]; i++) copy_asset(android_assets[i]);
+    static char cue[1024];
+    if (!find_cue(".", cue, sizeof cue) && !find_cue("disc", cue, sizeof cue)) {
+        char msg[1600];
+        snprintf(msg, sizeof msg, "Copy your disc image (the .cue file and all its .bin files) into this folder on your phone, "
+                 "then start the game again:\n\n%s\n\nFrom a PC: connect the phone with USB, choose File transfer, and open "
+                 "Android > data > com.killersheaven.hailtotheking > files.", home ? home : "(app folder)");
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Evil Dead: Hail to the King", msg, NULL);
+        exit(0);
+    }
+    fprintf(stderr, "[android] folder %s, disc %s\n", home ? home : "?", cue);
+    static char *args[4]; args[0] = (*argv)[0]; args[1] = cue; args[2] = "--launcher"; args[3] = NULL;
+    *argc = 3; *argv = args;
+}
+#else
 static void *getproc(const char *n) { return SDL_GL_GetProcAddress(n); }
+#endif
 
 /* ---- settings.ini ---- */
 static struct {
@@ -224,7 +278,7 @@ void platform_vblank(void) {
     audio_pump();
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_QUIT || (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)) exit(0);
+        if (e.type == SDL_QUIT || (e.type == SDL_KEYDOWN && (e.key.keysym.sym == SDLK_ESCAPE || e.key.keysym.sym == SDLK_AC_BACK))) exit(0);
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F11) {
             Uint32 fs = SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP;
             SDL_SetWindowFullscreen(win, fs ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);

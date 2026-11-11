@@ -55,6 +55,20 @@ turning your copy of the game into a PC program, happens on your machine.
 The first build takes 15–30 minutes, mostly compiling. Running `build.bat` again later
 reuses the tools.
 
+## The Android app
+
+`build-android.bat` runs the same first four steps, then:
+
+1. downloads Java (Temurin 17), SDL2's source and Google's Android command-line tools, which
+   fetch the Android platform library, build tools and the NDK (about 3 GB in all, once, into `.tools`);
+2. compiles the game and SDL2 for 64-bit ARM, so they match the PC build bit for bit;
+3. packages them with a small Java start-up class into `android-build/hail-to-the-king.apk`,
+   signed with a key made on your PC (kept in `.tools`, so updates install over the old app).
+
+On the phone, the app looks for your disc in its own folder
+(`Android/data/com.killersheaven.hailtotheking/files`), which you fill from a PC over USB.
+Saves, settings and `log.txt` live there too. Details: `games/hail-to-the-king/dist/README-android.txt`.
+
 ## While you play
 
 The game still reads your disc image while it runs: models, sounds, music, movies and text all
@@ -88,7 +102,8 @@ used a new folder.
 | HD art: HD font and legal screen | Works (the title screen keeps its original art) |
 | Cutscene viewer | Partly: the 56 Sofdec movies play; the 62 AVI movies don't yet |
 | Model viewer | Partly: 35 characters in their rest pose; no animations yet |
-| Save slots 3–8, sound reverb, Android | Not yet |
+| Android app (`build-android.bat`, controller only) | Early test: not yet tried on a phone |
+| Save slots 3–8, sound reverb, Android touch controls | Not yet |
 
 The options window shows the same thing: hover over an option or an Extras item and its status
 appears under the description, and unfinished ones carry a **PARTIAL** or **NOT YET** tag.

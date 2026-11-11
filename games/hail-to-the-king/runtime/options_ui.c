@@ -415,7 +415,7 @@ static void play_movie(const char *name) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) stop = 1;
-            else if (e.type == SDL_KEYDOWN && (e.key.keysym.sym == SDLK_ESCAPE || e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_SPACE || e.key.keysym.sym == SDLK_BACKSPACE)) stop = 1;
+            else if (e.type == SDL_KEYDOWN && (e.key.keysym.sym == SDLK_ESCAPE || e.key.keysym.sym == SDLK_AC_BACK || e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_SPACE || e.key.keysym.sym == SDLK_BACKSPACE)) stop = 1;
             else if (e.type == SDL_CONTROLLERBUTTONDOWN && (e.cbutton.button == SDL_CONTROLLER_BUTTON_B || e.cbutton.button == SDL_CONTROLLER_BUTTON_A || e.cbutton.button == SDL_CONTROLLER_BUTTON_START)) stop = 1;
             else if (e.type == SDL_MOUSEBUTTONDOWN) stop = 1;
         }
@@ -496,7 +496,7 @@ static int options_window_ex(int launcher) {
             if (e.type == SDL_QUIT) { result = 0; break; }
             else if (e.type == SDL_KEYDOWN && screen == S_KEYS && kwait >= 0) {   /* capturing a key */
                 SDL_Scancode sc = e.key.keysym.scancode;
-                if (sc != SDL_SCANCODE_ESCAPE && !key_reserved(sc)) {
+                if (sc != SDL_SCANCODE_ESCAPE && sc != SDL_SCANCODE_AC_BACK && !key_reserved(sc)) {
                     for (int i = 0; i < NKEYS; i++) if (i != kwait && keymap[i] == sc) keymap[i] = keymap[kwait];   /* swap */
                     keymap[kwait] = sc;
                 }
@@ -506,7 +506,7 @@ static int options_window_ex(int launcher) {
                 SDL_Keycode k = e.key.keysym.sym;
                 if (k == SDLK_UP) dy = -1; else if (k == SDLK_DOWN) dy = 1; else if (k == SDLK_LEFT) dx = -1; else if (k == SDLK_RIGHT) dx = 1;
                 else if (k == SDLK_PAGEUP) dy = -10; else if (k == SDLK_PAGEDOWN) dy = 10;
-                else if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) act = 1; else if (k == SDLK_ESCAPE || k == SDLK_BACKSPACE) cancel = 1;
+                else if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) act = 1; else if (k == SDLK_ESCAPE || k == SDLK_BACKSPACE || k == SDLK_AC_BACK) cancel = 1;
             } else if (e.type == SDL_CONTROLLERBUTTONDOWN) {
                 switch (e.cbutton.button) {
                 case SDL_CONTROLLER_BUTTON_DPAD_UP: dy = -1; break; case SDL_CONTROLLER_BUTTON_DPAD_DOWN: dy = 1; break;
