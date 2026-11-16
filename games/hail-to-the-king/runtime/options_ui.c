@@ -117,8 +117,16 @@ static const struct { int lvl; const char *text; } ex_status[5] = {
     { 1, "Partly: the 56 Sofdec movies play; the 62 AVI movies not yet." },
     { 1, "Partly: 35 characters, rest pose only (no animations yet)." },
     { 0, "" }, { 0, "" } };
-static const char *status_tag[3] = { "", "PARTIAL", "NOT YET" };
-static const uint32_t status_rgb[3] = { 0x7FB069, 0xE0A040, 0xE0453B };
+static const char *status_tag[4] = { "", "PARTIAL", "NOT YET", "PC ONLY" };
+static const uint32_t status_rgb[4] = { 0x7FB069, 0xE0A040, 0xE0453B, 0x8A847C };
+typedef struct { int lvl; const char *text; } row_st_t;
+static row_st_t row_st(int r) {           /* the status shown for an option row on this platform */
+#ifdef __ANDROID__
+    if (r == R_DISPLAY || r == R_MONITOR || r == R_WINDOW) { row_st_t t = { 3, "PC only: on Android the game always fills the screen." }; return t; }
+    if (r == R_ASPECT) { row_st_t t = { 0, "Works: 4:3 puts black bars at the sides of a wide phone screen." }; return t; }
+#endif
+    row_st_t t = { row_status[r].lvl, row_status[r].text }; return t;
+}
 static const char *disp_names[2] = { "Fullscreen", "Windowed" };
 static const char *aspect_names[2] = { "4:3 (original)", "Stretch to fill" };
 static const char *filter_names[2] = { "Smooth (original)", "Sharp pixels" };
@@ -600,7 +608,7 @@ static int options_window_ex(int launcher) {
                     int on = sel == r;
                     if (on) { ui_fill(40, y - 23, 880, 30, 0x8E1F1A, 150); ui_fill(40, y - 23, 4, 30, 0xE0453B, 255); }
                     ui_text(1, 64, y, 0, on ? 0xFFFFFF : 0xC8C2B8, 255, row_label[r]);
-                    if (row_status[r].lvl) ui_text(0, 64 + ui_text_w(1, row_label[r]) + 12, y - 2, 0, status_rgb[row_status[r].lvl], 255, status_tag[row_status[r].lvl]);
+                    if (row_st(r).lvl) ui_text(0, 64 + ui_text_w(1, row_label[r]) + 12, y - 2, 0, status_rgb[row_st(r).lvl], 255, status_tag[row_st(r).lvl]);
                     char v[96]; row_value(r, v, sizeof v);
                     ui_text(1, 680, y, 1, on ? 0xFFFFFF : 0xE8E2D8, 255, v);
                     ui_text(1, 440, y, 1, on ? 0xFFFFFF : 0x6A6460, 255, "<");
@@ -608,7 +616,7 @@ static int options_window_ex(int launcher) {
                 }
                 int hr = sel < NROWS ? sel : -1;
                 if (hr >= 0) { ui_text(0, 60, 576, 0, 0xA8A29A, 255, row_help[hr][0]); ui_text(0, 60, 597, 0, 0xA8A29A, 255, row_help[hr][1]);
-                               ui_text(0, 60, 620, 0, status_rgb[row_status[hr].lvl], 255, row_status[hr].text); }
+                               ui_text(0, 60, 620, 0, status_rgb[row_st(hr).lvl], 255, row_st(hr).text); }
                 else ui_text(0, 60, 586, 0, 0xA8A29A, 255, btn == B_PLAY ? "Save these settings and start the game." :
                                                          btn == B_SAVE ? (launcher ? "Save these settings." : "Save these settings and close.") : "Leave without saving.");
                 for (int b = btn_first; b < NBTN; b++) {
