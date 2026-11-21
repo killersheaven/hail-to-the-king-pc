@@ -11,6 +11,9 @@ are closed, which will be 1.0.0. The test builds before the first public release
   of at start-up.
 - Slots 7–8 stay greyed out on purpose: the game's own controller polling stops at port C,
   so it never sees cards on port D.
+- Sound: the AICA effect DSP (the chip's reverb/echo processor) is emulated. The game loads an
+  84-step effect program, but in the areas tested so far it sends no sound to it, so there's no
+  audible change yet; `log.txt` notes the first time it does.
 - Android: the display rows that only apply on PC are tagged PC ONLY; 4:3 explained.
 
 ## v0.15.0 — pre-release (2026-11-08)

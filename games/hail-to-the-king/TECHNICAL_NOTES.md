@@ -46,3 +46,11 @@ Debug aids: `DC_TRAP_ROM=1` (SIGTRAP on BIOS-ROM reads, run under gdb), `DC_DUMP
   present; "Save Slot 7/8" (port D) are always greyed.
 - The runtime answers ports B and C as idle standard controllers with two memory cards each;
   only port A carries the player's input.
+
+## 9. Sound effect DSP
+
+- At start-up the game loads an 84-step program into the AICA effect DSP (MPRO), with the delay
+  ring at RBP/RBL register value 0x6020. Through the title, intro, menus and the first cabin
+  area, though, every voice's effect send (IMXL) is 0 and the outputs' levels (EFSDL 0-15)
+  are 0: only the two external inputs (CD audio) are routed to the mix. The runtime runs the
+  program anyway and logs the first frame that sound is actually sent to it.

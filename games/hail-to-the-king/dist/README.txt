@@ -46,7 +46,7 @@ EXTRAS (launcher.bat)
   +/- / wheel / triggers.
 
 KNOWN GAPS
-  No reverb / echo in the sound yet. Save slots 7-8 stay greyed out. The
+  Save slots 7-8 stay greyed out. The
   title screen keeps its original art. See HOW-THE-RELEASE-WORKS.md in the project folder for
   the full list.
 

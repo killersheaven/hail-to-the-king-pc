@@ -12,14 +12,26 @@
  *   +24 DISDL(4) DIPAN(5)   +28 TL(8) ...   +20 IMXL(4) ISEL(4) (DSP send)
  * PCMS: 0 = 16-bit PCM, 1 = 8-bit PCM, 2/3 = 4-bit Yamaha ADPCM.
  *
- * Not modelled: the effect DSP (reverb), LFOs, the filter envelope, noise.
- * Voices that only feed the DSP (DISDL = 0) are played dry at their DSP send
+ * Effect DSP (reverb / echo): each voice also sends its signal (level IMXL)
+ * to one of 16 DSP inputs (MIXS[ISEL]). Every sample the DSP runs the game's
+ * program of up to 128 instructions (MPRO, 0x3400) over those inputs, its
+ * temporary registers and a delay ring in sound RAM (RBP / RBL at 0x2804),
+ * and leaves up to 16 outputs (EFREG) that are mixed in with their own level
+ * and pan (EFSDL / EFPAN at 0x2000 + n*4). Coefficients at 0x3000 (COEF),
+ * delay addresses at 0x3200 (MADRS). The ring holds a 16-bit float format
+ * (4-bit exponent, sign, 11-bit mantissa) unless an instruction says NOFL.
+ * Instruction fields and data path from the public AICA/SCSP DSP descriptions
+ * (the same DSP as the Saturn's SCSP). DC_NODSP=1 turns it off.
+ *
+ * Not modelled: LFOs, the filter envelope, noise. Without a DSP program,
+ * voices that only feed the DSP (DISDL = 0) are played dry at their send
  * level so nothing is silent.
  */
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 uint8_t *aica_ram(void);
 uint16_t aica_reg16(uint32_t off);
@@ -116,6 +128,96 @@ static int16_t fetch(int ch, voice *v, uint32_t idx, int pcms, uint32_t sa) {
     return (int16_t)v->adpcm_pred;
 }
 
+/* ---- effect DSP ---- */
+static struct {
+    int32_t temp[128], mems[32], mixs[16], efreg[16], memval[4];
+    int32_t acc, frc_reg, y_reg, adrs_reg;
+    uint32_t dec;
+    int last_step;                          /* steps after this are empty; -1 = no program */
+} dsp;
+static inline int32_t sx24(int32_t v) { return (int32_t)((uint32_t)v << 8) >> 8; }
+static inline int32_t sx13(int32_t v) { return (int32_t)((uint32_t)v << 19) >> 19; }
+static uint16_t dsp_pack(int32_t val) {      /* 24-bit -> ring's 16-bit float */
+    int sign = (val >> 23) & 1;
+    uint32_t t = (uint32_t)(val ^ (val << 1)) & 0xFFFFFF;
+    int e = 0; while (e < 12 && !(t & 0x800000)) { t <<= 1; e++; }
+    val = e < 12 ? (int32_t)(((uint32_t)val << e) & 0x3FFFFF) : (int32_t)((uint32_t)val << 11);
+    val = (val >> 11) & 0x7FF;
+    return (uint16_t)(val | sign << 15 | e << 11);
+}
+static int32_t dsp_unpack(uint16_t v) {
+    int sign = (v >> 15) & 1, e = (v >> 11) & 15;
+    int32_t u = (int32_t)(v & 0x7FF) << 11;
+    if (e > 11) { e = 11; u |= sign << 22; } else u |= (sign ^ 1) << 22;
+    u |= sign << 23;
+    return sx24(u) >> e;
+}
+static void dsp_find_program(void) {
+    static uint32_t seen_hash; uint32_t h = 2166136261u; dsp.last_step = -1;
+    for (int st = 0; st < 128; st++) for (int k = 0; k < 4; k++) {
+        uint16_t w = aica_reg16(0x3400u + st * 16u + k * 4u);
+        if (w) dsp.last_step = st;
+        h = (h ^ w) * 16777619u;
+    }
+    if (h != seen_hash) { seen_hash = h; if (dsp.last_step >= 0) fprintf(stderr, "[dsp] effect program: %d steps\n", dsp.last_step + 1); }
+}
+static void dsp_run(void) {
+    uint16_t *ram = (uint16_t *)aica_ram();                     /* 1M 16-bit words */
+    uint16_t r04 = aica_reg16(0x2804);
+    uint32_t rbp = (uint32_t)(r04 & 0xFFF) << 10, rbl = (8u * 1024u) << ((r04 >> 13) & 3);
+    memset(dsp.efreg, 0, sizeof dsp.efreg);
+    int32_t inputs = 0, shifted = 0;
+    for (int st = 0; st <= dsp.last_step; st++) {
+        uint32_t a = 0x3400u + (uint32_t)st * 16u;
+        uint16_t i0 = aica_reg16(a), i1 = aica_reg16(a + 4), i2 = aica_reg16(a + 8), i3 = aica_reg16(a + 12);
+        int tra = (i0 >> 9) & 0x7F, twt = (i0 >> 8) & 1, twa = (i0 >> 1) & 0x7F;
+        int xsel = (i1 >> 15) & 1, ysel = (i1 >> 13) & 3, ira = (i1 >> 7) & 0x3F, iwt = (i1 >> 6) & 1, iwa = (i1 >> 1) & 0x1F;
+        int table = (i2 >> 15) & 1, mwt = (i2 >> 14) & 1, mrd = (i2 >> 13) & 1, ewt = (i2 >> 12) & 1, ewa = (i2 >> 8) & 0xF;
+        int adrl = (i2 >> 7) & 1, frcl = (i2 >> 6) & 1, shift = (i2 >> 4) & 3, yrl = (i2 >> 3) & 1, negb = (i2 >> 2) & 1, zero = (i2 >> 1) & 1, bsel = i2 & 1;
+        int nofl = (i3 >> 15) & 1, coef = (i3 >> 9) & 0x3F, masa = (i3 >> 2) & 0x1F, adreb = (i3 >> 1) & 1, nxadr = i3 & 1;
+        /* input */
+        if (ira <= 0x1F) inputs = dsp.mems[ira];
+        else if (ira <= 0x2F) inputs = dsp.mixs[ira - 0x20] << 4;
+        else inputs = 0;                                         /* EXTS (CD audio): none */
+        inputs = sx24(inputs);
+        if (iwt) { dsp.mems[iwa] = dsp.memval[st & 3]; if (ira == iwa) inputs = dsp.memval[st & 3]; }
+        /* operands */
+        int32_t b = 0;
+        if (!zero) { b = bsel ? dsp.acc : sx24(dsp.temp[(tra + dsp.dec) & 0x7F]); if (negb) b = -b; }
+        int32_t x = xsel ? inputs : sx24(dsp.temp[(tra + dsp.dec) & 0x7F]);
+        int32_t y;
+        if (ysel == 0) y = dsp.frc_reg;
+        else if (ysel == 1) y = (int16_t)aica_reg16(0x3000u + (uint32_t)coef * 4u) >> 3;
+        else if (ysel == 2) y = (dsp.y_reg >> 11) & 0x1FFF;
+        else y = (dsp.y_reg >> 4) & 0x0FFF;
+        if (yrl) dsp.y_reg = inputs;
+        /* shifter (on the accumulator from the previous step) */
+        if (shift == 0) { shifted = dsp.acc; if (shifted > 0x7FFFFF) shifted = 0x7FFFFF; if (shifted < -0x800000) shifted = -0x800000; }
+        else if (shift == 1) { shifted = dsp.acc * 2; if (shifted > 0x7FFFFF) shifted = 0x7FFFFF; if (shifted < -0x800000) shifted = -0x800000; }
+        else if (shift == 2) shifted = sx24(dsp.acc * 2);
+        else shifted = sx24(dsp.acc);
+        /* multiply-accumulate */
+        dsp.acc = (int32_t)(((int64_t)x * (int64_t)sx13(y)) >> 12) + b;
+        if (twt) dsp.temp[(twa + dsp.dec) & 0x7F] = shifted;
+        if (frcl) dsp.frc_reg = shift == 3 ? shifted & 0xFFF : (shifted >> 11) & 0x1FFF;
+        /* delay ring (memory is reached on odd steps) */
+        if ((mrd || mwt) && (st & 1)) {
+            uint32_t addr = aica_reg16(0x3200u + (uint32_t)masa * 4u);
+            if (!table) addr += dsp.dec;
+            if (adreb) addr += (uint32_t)dsp.adrs_reg & 0xFFF;
+            if (nxadr) addr++;
+            addr &= table ? 0xFFFFu : rbl - 1;
+            addr = (addr + rbp) & 0xFFFFF;
+            if (mrd) dsp.memval[(st + 2) & 3] = nofl ? (int32_t)(int16_t)ram[addr] << 8 : dsp_unpack(ram[addr]);
+            if (mwt) ram[addr] = nofl ? (uint16_t)(shifted >> 8) : dsp_pack(shifted);
+        }
+        if (adrl) dsp.adrs_reg = shift == 3 ? (shifted >> 12) & 0xFFF : inputs >> 16;
+        if (ewt) dsp.efreg[ewa] += shifted >> 8;
+    }
+    dsp.dec--;
+    memset(dsp.mixs, 0, sizeof dsp.mixs);
+}
+
 static inline float db_to_lin(float db) { return powf(10.0f, db / 20.0f); }
 static float lin_cache_tl[256], lin_cache_lvl[16];
 static void init_tables(void) {
@@ -127,6 +229,9 @@ static void init_tables(void) {
 uint64_t synth_active_samples;
 void synth_sample(int32_t *outl, int32_t *outr) {
     init_tables();
+    static int nodsp = -1; if (nodsp < 0) nodsp = getenv("DC_NODSP") != NULL;
+    static uint32_t tick; if (!(tick++ & 1023)) { if (nodsp) dsp.last_step = -1; else dsp_find_program(); }
+    int use_dsp = dsp.last_step >= 0;
     float L = 0, Rr = 0;
     for (int ch = 0; ch < 64; ch++) {
         voice *v = &V[ch];
@@ -164,9 +269,11 @@ void synth_sample(int32_t *outl, int32_t *outr) {
         float s = (float)v->prev + ((float)v->cur - (float)v->prev) * fr;   /* linear interpolation */
         /* level */
         uint16_t r24 = R(ch, 0x24), r28 = R(ch, 0x28), r20 = R(ch, 0x20);
-        int disdl = (r24 >> 8) & 15, dipan = r24 & 31;
-        if (!disdl) disdl = (r20 >> 4) & 15;                  /* DSP-only voices: play dry at the send level */
-        float g = lin_cache_lvl[disdl] * lin_cache_tl[r28 >> 8] * db_to_lin(-0.09375f * (float)v->eg);
+        int disdl = (r24 >> 8) & 15, dipan = r24 & 31, imxl = (r20 >> 4) & 15;
+        float env = lin_cache_tl[r28 >> 8] * db_to_lin(-0.09375f * (float)v->eg);
+        if (use_dsp) { if (imxl) dsp.mixs[r20 & 15] += (int32_t)(s * env * lin_cache_lvl[imxl]) << 4; }   /* effect send, 20-bit */
+        else if (!disdl) disdl = imxl;                        /* no DSP program: play DSP-only voices dry */
+        float g = lin_cache_lvl[disdl] * env;
         float pl = 1, pr = 1;
         if (dipan & 15) { float a = lin_cache_lvl[15 - (dipan & 15)]; if (dipan & 16) pl = a; else pr = a; }
         L += s * g * pl; Rr += s * g * pr;
@@ -181,6 +288,28 @@ void synth_sample(int32_t *outl, int32_t *outr) {
                 v->pos = lsa + (v->pos - lea);
                 if (pcms >= 2 && v->loop_saved) { v->adpcm_pos = (int)lsa; v->adpcm_pred = v->loop_pred; v->adpcm_step = v->loop_step; v->cur_idx = -1; }
             } else { v->state = EG_OFF; v->pos = lea; }
+        }
+    }
+    if (use_dsp) {                                            /* effect outputs, each with its own level and pan */
+        { static int dbg = -1; if (dbg < 0) dbg = getenv("DC_DSPDEBUG") != NULL;
+          static uint32_t n; static int32_t mx_in, mx_out;
+          for (int i = 0; i < 16; i++) { int32_t m = dsp.mixs[i] < 0 ? -dsp.mixs[i] : dsp.mixs[i]; if (m > mx_in) mx_in = m; }
+          static int announced; if (mx_in && !announced) { announced = 1; extern uint64_t dc_frame_count(void);
+              fprintf(stderr, "[dsp] the game is sending sound to the effect DSP (reverb) from frame %llu\n", (unsigned long long)dc_frame_count()); }
+          if (dbg && !(++n % 44100)) {
+              fprintf(stderr, "[dsp] max send %d, max out %d, RBP/RBL %04X, EFSDL", mx_in, mx_out, aica_reg16(0x2804));
+              for (int i = 0; i < 18; i++) fprintf(stderr, " %04X", aica_reg16(0x2000u + (uint32_t)i * 4u));
+              int sends = 0; for (int ch = 0; ch < 64; ch++) if (V[ch].state != EG_OFF && (R(ch, 0x20) >> 4) & 15) sends++;
+              fprintf(stderr, " | voices sending %d\n", sends); mx_in = mx_out = 0; }
+          dsp_run();
+          for (int i = 0; i < 16; i++) { int32_t m = dsp.efreg[i] < 0 ? -dsp.efreg[i] : dsp.efreg[i]; if (m > mx_out) mx_out = m; } }
+        for (int i = 0; i < 16; i++) {
+            if (!dsp.efreg[i]) continue;
+            uint16_t e = aica_reg16(0x2000u + (uint32_t)i * 4u);
+            int lvl = (e >> 8) & 15, pan = e & 31; if (!lvl) continue;
+            float o = (float)dsp.efreg[i] * lin_cache_lvl[lvl], pl = 1, pr = 1;
+            if (pan & 15) { float a = lin_cache_lvl[15 - (pan & 15)]; if (pan & 16) pl = a; else pr = a; }
+            L += o * pl; Rr += o * pr;
         }
     }
     float mv = lin_cache_lvl[aica_reg16(0x2800) & 15];

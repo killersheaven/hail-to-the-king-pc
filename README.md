@@ -68,7 +68,7 @@ for the details and for undocumented findings about the game (data formats, RAM 
 
 ## Status and known gaps
 
-The game boots, plays, saves and loads. Not done yet: sound reverb/echo (the AICA DSP), the disc's AVI (TrueMotion) movies, model animations, and touch controls on Android. The full
+The game boots, plays, saves and loads. Not done yet: the disc's AVI (TrueMotion) movies, model animations, and touch controls on Android. The full
 list is in [How the release works](HOW-THE-RELEASE-WORKS.md#what-works-in-this-version).
 
 ## Legal

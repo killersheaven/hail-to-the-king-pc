@@ -104,7 +104,8 @@ used a new folder.
 | Model viewer | Partly: 35 characters in their rest pose; no animations yet |
 | Android app (`build-android.bat`, controller only) | Early test: not yet tried on a phone |
 | Save slots 7–8 | Won't work: the game never checks the fourth controller port |
-| Sound reverb, Android touch controls | Not yet |
+| Sound reverb (the chip's effect processor) | Emulated; the game hasn't used it in the areas tested so far |
+| Android touch controls | Not yet |
 
 The options window shows the same thing: hover over an option or an Extras item and its status
 appears under the description, and unfinished ones carry a **PARTIAL** or **NOT YET** tag.
