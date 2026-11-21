@@ -14,7 +14,7 @@ Current version: **v0.15.0** — see [CHANGELOG.md](CHANGELOG.md).
 - The full game running natively, at your monitor's resolution, in a window or fullscreen
 - Keyboard (every key can be rebound) and modern controllers
 - Button prompts for Dreamcast, Xbox, PlayStation or Switch controllers
-- Memory-card saves as **save slots** (no VMU or block talk)
+- Memory-card saves as **save slots** (no VMU or block talk): six working slots
 - A **launcher** with Extras:
   - **Documents**: all 17 notes, journals and Necronomicon pages
   - **Cutscenes**: the game's 56 Sofdec movies with sound (*partial: the 62 AVI movies don't play yet*)
@@ -68,8 +68,7 @@ for the details and for undocumented findings about the game (data formats, RAM 
 
 ## Status and known gaps
 
-The game boots, plays, saves and loads. Not done yet: sound reverb/echo (the AICA DSP), save
-slots 3–8, the disc's AVI (TrueMotion) movies, model animations, and touch controls on Android. The full
+The game boots, plays, saves and loads. Not done yet: sound reverb/echo (the AICA DSP), the disc's AVI (TrueMotion) movies, model animations, and touch controls on Android. The full
 list is in [How the release works](HOW-THE-RELEASE-WORKS.md#what-works-in-this-version).
 
 ## Legal

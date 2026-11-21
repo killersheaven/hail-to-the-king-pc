@@ -31,7 +31,7 @@ This app was built on your PC from your own disc. It needs:
    Back button goes back in the launcher and quits from the game.
 
 YOUR FILES
-   Saves (vmu_a1.bin, vmu_a2.bin), settings.ini and log.txt live in the same
+   Saves (vmu_a1.bin ... vmu_c2.bin, Save Slots 1-6), settings.ini and log.txt live in the same
    folder as the disc. If something goes wrong, copy log.txt to your PC and
    send it with your report.
 

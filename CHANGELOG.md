@@ -4,6 +4,15 @@ Version numbers: `0.<build>.<fix>` until a complete playthrough is verified and 
 are closed, which will be 1.0.0. The test builds before the first public release were numbered
 1–14, so the first release is 0.14.0.
 
+## Unreleased
+
+- Save slots 3–6 work: the runtime now emulates controllers on ports B and C, each with two
+  memory cards (`vmu_b1.bin` … `vmu_c2.bin`). A card's file is made on its first save instead
+  of at start-up.
+- Slots 7–8 stay greyed out on purpose: the game's own controller polling stops at port C,
+  so it never sees cards on port D.
+- Android: the display rows that only apply on PC are tagged PC ONLY; 4:3 explained.
+
 ## v0.15.0 — pre-release (2026-11-08)
 
 - HD font is back: the game's font sheet is redrawn at 4x with Courier Prime while the game

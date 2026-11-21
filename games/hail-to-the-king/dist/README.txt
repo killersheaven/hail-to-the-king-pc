@@ -30,8 +30,11 @@ OPTIONS (options.bat, or settings.ini)
   while the game runs, and the HD legal screen).
 
 SAVING
-  The memory card is emulated: Save Slot 1 = vmu_a1.bin, Save Slot 2 =
-  vmu_a2.bin in this folder. Pick up the Save Tape from the tape recorder in
+  The memory cards are emulated. Save Slots 1-6 work and are files in this
+  folder: Slots 1-2 = vmu_a1.bin, vmu_a2.bin; 3-4 = vmu_b1.bin, vmu_b2.bin;
+  5-6 = vmu_c1.bin, vmu_c2.bin (each file appears on its first save).
+  Slots 7-8 stay greyed out: the game itself never checks the fourth
+  controller port, where those cards would be. Pick up the Save Tape from the tape recorder in
   the cabin, then use it at a save box.
 
 EXTRAS (launcher.bat)
@@ -43,7 +46,7 @@ EXTRAS (launcher.bat)
   +/- / wheel / triggers.
 
 KNOWN GAPS
-  No reverb / echo in the sound yet. Save slots 3-8 are greyed out. The
+  No reverb / echo in the sound yet. Save slots 7-8 stay greyed out. The
   title screen keeps its original art. See HOW-THE-RELEASE-WORKS.md in the project folder for
   the full list.
 

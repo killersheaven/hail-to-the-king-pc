@@ -50,7 +50,7 @@ turning your copy of the game into a PC program, happens on your machine.
 | `hail-to-the-king.exe`, `SDL2.dll` | The game |
 | `textures/` | HD legal screen and button-prompt icons |
 | `README.txt`, `LICENSE.txt` | Player's guide and licence |
-| `settings.ini`, `vmu_a1.bin`, `vmu_a2.bin`, `log.txt` | Created when you play: settings, your two save slots, a log for bug reports |
+| `settings.ini`, `vmu_a1.bin` … `vmu_c2.bin`, `log.txt` | Created when you play: settings, your save slots (one file per slot, made on its first save), a log for bug reports |
 
 The first build takes 15–30 minutes, mostly compiling. Running `build.bat` again later
 reuses the tools.
@@ -91,7 +91,7 @@ used a new folder.
 
 | Feature | State |
 |---|---|
-| The game: playing, saving and loading (slots 1 and 2) | Works |
+| The game: playing, saving and loading (save slots 1–6) | Works |
 | Display options: fullscreen, monitor, window size, render resolution, aspect | Works |
 | Texture filtering, menu sharpening | Works |
 | Keyboard controls (rebind in Options) and game controllers | Works |
@@ -103,7 +103,8 @@ used a new folder.
 | Cutscene viewer | Partly: the 56 Sofdec movies play; the 62 AVI movies don't yet |
 | Model viewer | Partly: 35 characters in their rest pose; no animations yet |
 | Android app (`build-android.bat`, controller only) | Early test: not yet tried on a phone |
-| Save slots 3–8, sound reverb, Android touch controls | Not yet |
+| Save slots 7–8 | Won't work: the game never checks the fourth controller port |
+| Sound reverb, Android touch controls | Not yet |
 
 The options window shows the same thing: hover over an option or an Extras item and its status
 appears under the description, and unfinished ones carry a **PARTIAL** or **NOT YET** tag.

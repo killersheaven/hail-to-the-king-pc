@@ -37,3 +37,12 @@ Debug aids: `DC_TRAP_ROM=1` (SIGTRAP on BIOS-ROM reads, run under gdb), `DC_DUMP
 - **Character rule** (models.c `models_scan`): mesh chunk with kind even and extra = 0, skeleton at type + (1<<23), and a texture with the same object -> 35 characters across the disc (most in AZ00.DC). Kind 22 meshes (0xB...) are small multi-quad things (HUD/effects?), not characters.
 - **Build 14**: launcher Extras > Models (models.c + options_ui.c, SDL_RenderGeometry, painter-sorted, UVs shifted into 0..1 per triangle since SDL can't repeat). Names are descriptions by look (mnames table). Alternate parts (Ash's 13 hands) hidden except the first per bone set; Enter shows all.
 
+
+## 8. Controllers and memory cards
+
+- The game polls controller ports **A, B and C only**: its Maple command list ends at port C
+  (end-of-list bit on the third entry), and it never sends anything to port D. So of the eight
+  save slots its Load/Save screens list (two memory-card slots per port), only six can ever be
+  present; "Save Slot 7/8" (port D) are always greyed.
+- The runtime answers ports B and C as idle standard controllers with two memory cards each;
+  only port A carries the player's input.

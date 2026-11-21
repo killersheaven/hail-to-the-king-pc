@@ -1,9 +1,13 @@
 /* Maple bus: answers the game's controller command lists.
  *
- * One standard controller on port A with a memory card (VMU) in its first
- * slot (sub-unit 1); ports B-D empty. The memory card is a 128 KB file
- * (vmu_a1.bin; DC_VMU=path overrides), created pre-formatted when missing and
- * written through on every block write. Its screen and clock accept writes.
+ * A standard controller on each of ports A-D, each with two memory cards
+ * (VMUs, sub-units 1 and 2): the game's eight save slots. Only port A's
+ * controller is played with; B-D report an idle pad so their cards count.
+ * Each card is a 128 KB file - vmu_a1.bin, vmu_a2.bin (Save Slots 1-2),
+ * vmu_b1.bin ... vmu_d2.bin (Slots 3-8); DC_VMU=path overrides the first -
+ * formatted in memory when missing, written to disk on the first save and
+ * through on every block write after. Screen and clock writes are accepted.
+ * DC_ONEPAD=1: only port A (the old layout, slots 1-2).
  * Frame layout from public documentation (KallistiOS maple.h, dreamcast.wiki).
  *
  * Input comes from maple_pad (set by the platform layer) or, for headless
@@ -28,8 +32,8 @@ enum { RSP_DEVINFO = 5, RSP_ALLINFO = 6, RSP_ACK = 7, RSP_DATATRF = 8, RSP_UNKNO
 enum { RSP_FILEERR = 0xFB };
 
 /* ---- memory card (VMU) image ---- */
-/* two cards: controller A slots 1 and 2 = "Save Slot 1" and "Save Slot 2" */
-enum { NCARDS = 2 };
+/* eight cards: port A slots 1-2, B 1-2, C 1-2, D 1-2 = "Save Slot 1" ... "Save Slot 8" */
+enum { NCARDS = 8 };
 static uint8_t vmu_img[NCARDS][256 * 512];
 static char vmu_paths[NCARDS][1024];
 static int vmu_readys[NCARDS];
@@ -61,15 +65,13 @@ static void vmu_load(void) {
         const char *e = getenv("DC_VMU");
         if (vc == 0) snprintf(vmu_path, sizeof vmu_path, "%s", e ? e : "vmu_a1.bin");
         else if (e) snprintf(vmu_path, sizeof vmu_path, "%s.%d", e, vc + 1);
-        else snprintf(vmu_path, sizeof vmu_path, "vmu_a%d.bin", vc + 1);
+        else snprintf(vmu_path, sizeof vmu_path, "vmu_%c%d.bin", 'a' + vc / 2, vc % 2 + 1);
     }
     FILE *f = fopen(vmu_path, "rb");
     if (f && fread(vmu, 1, sizeof vmu, f) == sizeof vmu) { fclose(f); fprintf(stderr, "[vmu] memory card %s loaded\n", vmu_path); return; }
     if (f) fclose(f);
-    vmu_format();
-    f = fopen(vmu_path, "wb");
-    if (f) { fwrite(vmu, 1, sizeof vmu, f); fclose(f); }
-    fprintf(stderr, "[vmu] new formatted memory card %s%s\n", vmu_path, f ? "" : " (cannot write it!)");
+    vmu_format();                                  /* the file is written on the first save to this card */
+    fprintf(stderr, "[vmu] empty memory card %s (formatted, not saved yet)\n", vmu_path);
 }
 static void vmu_save_range(uint32_t off, uint32_t len) {
     FILE *f = fopen(vmu_path, "r+b");
@@ -213,10 +215,11 @@ void maple_dma(uint32_t list) {
           if (dbg && k == nseen && nseen < 64) { seen[nseen++] = key; fprintf(stderr, "[maple] port %d to %02X cmd %d len %d (frame %llu)\n", port, to, cmd, len, (unsigned long long)dc_frame_count()); } }
         uint32_t out = recv;
         int unit = to & 0x3F;                                         /* 0x20 = main device, 0x01-0x10 = sub-units */
-        if (port == 0 && (unit == 0x01 || unit == 0x02) && !getenv("DC_NOVMU")) {
-            vc = unit == 0x02;
+        static int onepad = -1; if (onepad < 0) onepad = getenv("DC_ONEPAD") != NULL;
+        if ((port == 0 || !onepad) && (unit == 0x01 || unit == 0x02) && !getenv("DC_NOVMU")) {
+            vc = port * 2 + (unit == 0x02);
             vmu_frame(out, cmd, from, (uint32_t)(port << 6) | (uint32_t)unit, p + 12, len);
-        } else if (port != 0 || unit != 0x20) {
+        } else if ((port != 0 && onepad) || unit != 0x20) {
             W32(out, 0xFFFFFFFFu);                                    /* no device */
         } else {
             uint32_t me = (uint32_t)(port << 6) | 0x20 | (getenv("DC_NOVMU") ? 0 : 0x03);   /* bits 0, 1: memory cards in slots 1 and 2 */
@@ -227,7 +230,8 @@ void maple_dma(uint32_t list) {
                 if (cmd == CMD_ALLINFO) for (int i = 0; i < 20; i++) put(&out, 0);
                 break;
             case CMD_GETCOND: {
-                const maple_pad_t *k = &maple_pad;
+                static const maple_pad_t idle = { 0, 0, 0, 0x80, 0x80 };
+                const maple_pad_t *k = port == 0 ? &maple_pad : &idle;      /* B-D: nobody's holding them */
                 put(&out, RSP_DATATRF | (uint32_t)from << 8 | me << 16 | 3u << 24);
                 put(&out, FUNC_CONTROLLER);
                 put(&out, (uint32_t)(uint16_t)~k->buttons | (uint32_t)k->rtrig << 16 | (uint32_t)k->ltrig << 24);
