@@ -55,6 +55,21 @@ void text_patch(uint32_t a, uint32_t len) {
     if (base + len > 0x01000000u) len = 0x01000000u - base;
     uint8_t *m = dc_ram + base;
     static int logged;
+    /* Original data bug: in the lower-case slot-name table the "Controller C, slot 1" entry
+     * holds "ARCANE LIBRARY" (a room name) instead, so the game itself would label Save
+     * Slot 5 that way on that screen. Matched together with the entry before it, because
+     * "ARCANE LIBRARY" is also a real room name elsewhere. Runs before the table below
+     * renames that previous entry. */
+    {
+        static const char seq[] = "Controller B, slot 2\0\0\0\0ARCANE LIBRARY";
+        const size_t n = sizeof seq, skip = sizeof "Controller B, slot 2" + 3, room = sizeof "ARCANE LIBRARY";
+        uint8_t *p = m, *end = m + len;
+        while (p + n <= end && (p = find(p, end, seq, n))) {
+            memset(p + skip, 0, room); memcpy(p + skip, "Save Slot 5", sizeof "Save Slot 5" - 1);
+            if (logged++ < 40) fprintf(stderr, "[text] \"ARCANE LIBRARY\" (slot-5 label) -> \"Save Slot 5\" at %08X\n", 0x8C000000u + (uint32_t)(p + skip - dc_ram));
+            p += n;
+        }
+    }
     for (int i = 0; i < NTP; i++) {
         size_t fl = strlen(tp[i][0]) + 1, tl = strlen(tp[i][1]);
         if (tl >= fl) { static int w; if (!w++) fprintf(stderr, "[text] replacement %d is too long, skipped\n", i); continue; }
