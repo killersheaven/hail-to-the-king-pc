@@ -154,10 +154,13 @@ static void cfg_save(void) {
                "button_prompts = %s\n"
                "#\n# Hotkeys: F11 fullscreen, F10 render resolution, F9 aspect, F12 screenshot\n"
                "# Run options.bat for a settings window.\n"
+               "#\n# save_slots: 2 (Save Slots 1-2, the two cards on controller A, each holding\n"
+               "#   several saves) or 6 (adds cards on controllers B and C: Slots 3-6)\n"
+               "save_slots = %d\n"
                "#\n# Testing cheats (on/off)\n"
                "cheat_immortality = %s\ncheat_unlimited_ammo = %s\ncheat_unlimited_fuel = %s\ncheat_damascene_blade = %s\n",
             cfg.stretch ? "stretch" : "4:3", cfg.ui_mode == 0 ? "off" : cfg.ui_mode == 2 ? "all" : "text",
-            cfg.sharp ? "sharp" : "smooth", cfg.hd ? "on" : "off", prompt_names[cfg.prompts & 3],
+            cfg.sharp ? "sharp" : "smooth", cfg.hd ? "on" : "off", prompt_names[cfg.prompts & 3], maple_save_slots,
             cfg.cheats & 1 ? "on" : "off", cfg.cheats & 2 ? "on" : "off", cfg.cheats & 4 ? "on" : "off", cfg.cheats & 8 ? "on" : "off");
     fprintf(f, "#\n# Keyboard: which key acts as each Dreamcast pad button (key names as SDL writes them)\n");
     for (int i = 0; i < NKEYS; i++) fprintf(f, "%s = %s\n", key_cfg[i], SDL_GetScancodeName(keymap[i]));
@@ -189,6 +192,7 @@ static void cfg_load(void) {
             else if (sscanf(v, "%dx%d", &a, &b) == 2 && a >= 64 && b >= 48) { cfg.render_mode = -1; cfg.render_w = a; cfg.render_h = b; }
             else if (sscanf(v, "%dx", &a) == 1 && a >= 1 && a <= 8) cfg.render_mode = a;
         }
+        else if (!SDL_strcasecmp(k, "save_slots")) maple_save_slots = atoi(v) >= 3 ? 6 : 2;
         else if (!SDL_strcasecmp(k, "aspect")) cfg.stretch = !SDL_strcasecmp(v, "stretch");
         else if (!SDL_strncasecmp(k, "cheat_", 6)) { for (int i = 0; i < 4; i++) if (!SDL_strcasecmp(k, cheat_keys[i])) {
             if (!SDL_strcasecmp(v, "on")) cfg.cheats |= 1 << i; else cfg.cheats &= ~(1 << i); } }

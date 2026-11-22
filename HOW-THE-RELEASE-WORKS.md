@@ -50,7 +50,7 @@ turning your copy of the game into a PC program, happens on your machine.
 | `hail-to-the-king.exe`, `SDL2.dll` | The game |
 | `textures/` | HD legal screen and button-prompt icons |
 | `README.txt`, `LICENSE.txt` | Player's guide and licence |
-| `settings.ini`, `vmu_a1.bin` … `vmu_c2.bin`, `log.txt` | Created when you play: settings, your save slots (one file per slot, made on its first save), a log for bug reports |
+| `settings.ini`, `vmu_a1.bin`, `vmu_a2.bin`, `log.txt` | Created when you play: settings, your save slots (one file per slot, made on its first save), a log for bug reports |
 
 The first build takes 15–30 minutes, mostly compiling. Running `build.bat` again later
 reuses the tools.
