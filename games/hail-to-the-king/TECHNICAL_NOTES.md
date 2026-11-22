@@ -44,8 +44,25 @@ Debug aids: `DC_TRAP_ROM=1` (SIGTRAP on BIOS-ROM reads, run under gdb), `DC_DUMP
   (end-of-list bit on the third entry), and it never sends anything to port D. So of the eight
   save slots its Load/Save screens list (two memory-card slots per port), only six can ever be
   present; "Save Slot 7/8" (port D) are always greyed.
-- The runtime answers ports B and C as idle standard controllers with two memory cards each;
-  only port A carries the player's input.
+- By default only port A answers (two cards: Slots 1-2, eight 23-block saves each). With
+  `save_slots = 6` (or `DC_SAVE_SLOTS=6`) the runtime also answers ports B and C as idle
+  standard controllers with two memory cards each; only port A carries the player's input.
+- **Load/Save screens are two levels.** The first lists the eight card slots ("Save Slot 1-8"
+  after the text patch; originally "Controller A, Slot 1" ...). Picking one opens a second list
+  of up to eight save entries on that card, empty ones shown as "Empty". A card has 200 user
+  blocks and a save is 23 blocks, so eight saves fit.
+- **Save file:** `EVILDEAD.000`, a data file (directory type 0x33). Its VMS header description
+  is the room name plus play time, e.g. `ED: HELLBILLY HOUSE 00:43:48`; the short description
+  is `EVIL DEAD`. While building the list the game reads only each save's header block; it reads
+  the rest when you load.
+- **Original data bug:** the game's data holds two slot-name tables ("Controller A, Slot 1"
+  in 1ST_READ.BIN and "Controller A, slot 1" in the save-screen text). In the second, the
+  "Controller C, slot 1" entry is missing: its place holds "ARCANE LIBRARY", a room name, so on
+  real hardware that screen would label a card in controller C's first slot "ARCANE LIBRARY".
+  `textpatch.c` renames it "Save Slot 5", matching it together with the entry before it.
+- **Imported saves:** saves in VMI/VMS form (the Planetweb browser's download format, used by
+  emulators and save-sharing sites) go onto a card with `tools/vmu_import.py`. A Hellbilly
+  House save imported this way loads into the level.
 
 ## 9. Sound effect DSP
 
@@ -54,3 +71,43 @@ Debug aids: `DC_TRAP_ROM=1` (SIGTRAP on BIOS-ROM reads, run under gdb), `DC_DUMP
   area, though, every voice's effect send (IMXL) is 0 and the outputs' levels (EFSDL 0-15)
   are 0: only the two external inputs (CD audio) are routed to the mix. The runtime runs the
   program anyway and logs the first frame that sound is actually sent to it.
+
+## 10. One-click build: translating and compiling at launch
+
+The one-click build (CMake `JIT=ON`) ships no game code. At every launch it translates the
+player's `1ST_READ.BIN` with `recomp/recomp.c` and compiles the C in memory with a built-in
+TinyCC (`runtime/jit.c`); nothing is written to disk.
+
+**Measurements (2026-11-22, cloud x86-64, headless, `DC_VCLOCK=200000`, fields 0-1500):**
+
+| Build | Time | vs native | RAM at field 1500 |
+|---|---|---|---|
+| Native (clang/gcc -O2, ahead of time) | 37 s | 1x | reference |
+| TinyCC, memory access through inline functions | 142 s | 3.8x | identical |
+| TinyCC, memory access through macros (shipped) | 116-119 s | 3.2x | identical |
+| Interpreter only (`interp.c`, no translated code) | 330 s | 8.9x | differs |
+
+- TinyCC does not inline `static inline` functions, so every `R32`/`W32` became a call;
+  `sh4ctx.h` uses macros under `__TINYC__`, which saved 16%.
+- Real time, same scene (`DC_VCLOCK_UNTIL=3600`: deterministic up to the first cabin, then the
+  host clock): native and TinyCC both render a steady 30 fps (150-152 frames per 5 s).
+  Heavier scenes have not been timed yet.
+- Startup: translating 6,006 functions takes 0.2-0.3 s, compiling 29 files 1.2-1.8 s.
+- TinyCC's x86-64 output gives bit-identical float results to gcc/clang here (no FMA contraction).
+- **Open question:** the interpreter-only run ends with different RAM than native at field
+  1500 (first difference at byte 59,989). Recompiled and interpreted code should agree, so
+  some instruction or timing path differs between `interp.c` and the generated code. It
+  matters only for code the analysis never found; not investigated yet.
+
+**Rules of the Python tools that the C port reproduces on purpose** (`recomp.c` output is
+byte-identical to `recomp.py`, checked file by file):
+- Exploration order decides function boundaries: a `bra` to an address that is *already* a
+  function becomes a tail call, otherwise the target joins the current function. Seeds are
+  explored first-in first-out, branches within a function last-in first-out.
+- `analyze.py explore()` has a case for register copies (`ins.mn.startswith("mov r")`) that
+  never matches (the mnemonic is `"mov {m},{n}"`), so a copy forgets the source constant.
+  Changing it would change the generated code; it is kept as is in both versions.
+- `analyze.py gaps()` indexes its coverage array by `address - 0x8C010000`; overlay addresses
+  (`0x8C00F400-0x8C00FFFF`) are negative and, in Python, wrap to the end of the array, marking
+  the last ~3 KB of the program as covered. The C version does the same.
+- The resume table keeps, for a return address shared by two functions, the lower function.

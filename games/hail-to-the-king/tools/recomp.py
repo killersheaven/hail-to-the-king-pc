@@ -11,14 +11,18 @@ import sys, os, io, json, struct, contextlib, runpy
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sh4
 
+# recomp.py --interp-only <dir>: just the instruction interpreter (interp_ops.c), which holds no
+# game code; the one-click build compiles it in and translates the game itself at launch.
+INTERP_ONLY = len(sys.argv) > 2 and sys.argv[1] == "--interp-only"
 IMG = sys.argv[1] if len(sys.argv) > 1 else "../orig/1ST_READ.BIN"
 OUT = sys.argv[2] if len(sys.argv) > 2 else "../build/gen"
-sys.argv = ["analyze.py", IMG]
-with contextlib.redirect_stdout(io.StringIO()):
-    A = runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), "analyze.py"), run_name="__main__")
-img, B, END = A["img"], A["BASE"], A["END"]
-funcs, jumptables = A["funcs"], A["jumptables"]
-h, w = A["h"], A["w"]
+if not INTERP_ONLY:
+    sys.argv = ["analyze.py", IMG]
+    with contextlib.redirect_stdout(io.StringIO()):
+        A = runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), "analyze.py"), run_name="__main__")
+    img, B, END = A["img"], A["BASE"], A["END"]
+    funcs, jumptables = A["funcs"], A["jumptables"]
+    h, w = A["h"], A["w"]
 try:
     NAMES = {int(k, 16): v for k, v in json.load(open(os.path.join(os.path.dirname(OUT.rstrip("/")) or ".", "../notes/names.json"))).items()}
 except Exception:
@@ -424,7 +428,7 @@ def main():
         open(os.path.join(OUT, "funcs_%03d.c" % ci), "w").write(src)
     print("interpreter cases: %d" % gen_interp(os.path.join(OUT, "interp_ops.c")))
     # dispatch table
-    d = ['#include "sh4ctx.h"', "#include <stddef.h>", "typedef struct { uint32_t a; sh4fn f; } fnent;",
+    d = ['#include "sh4ctx.h"', "typedef struct { uint32_t a; sh4fn f; } fnent;",
          "const fnent sh4_fn_table[] = {"]
     d += ["  {0x%08Xu, %s}," % (e, fname(e)) for e in entries]
     d += ["};", "const size_t sh4_fn_count = %d;" % len(entries)]
@@ -433,14 +437,14 @@ def main():
     rt = {}
     for e in entries:
         for r in RESUMES.get(e, []): rt.setdefault(r, e)
-    d = ['#include "sh4ctx.h"', "#include <stddef.h>", "typedef struct { uint32_t a; sh4fn f; } fnent;",
+    d = ['#include "sh4ctx.h"', "typedef struct { uint32_t a; sh4fn f; } fnent;",
          "const fnent sh4_resume_table[] = {"]
     d += ["  {0x%08Xu, %s}," % (r, fname(rt[r])) for r in sorted(rt)]
     d += ["};", "const size_t sh4_resume_count = %d;" % len(rt)]
     open(os.path.join(OUT, "resume.c"), "w").write("\n".join(d) + "\n")
     # literals baked in as constants: the runtime reports writes to them
     bk = sorted(BAKED)
-    lm = ['#include <stdint.h>', '#include <stddef.h>', "const uint32_t sh4_baked_lits[] = {"]
+    lm = ['#include "sh4ctx.h"', "const uint32_t sh4_baked_lits[] = {"]
     lm += ["  0x%08Xu," % a for a in bk] + ["};", "const size_t sh4_baked_count = %d;" % len(bk)]
     open(os.path.join(OUT, "litmap.c"), "w").write("\n".join(lm) + "\n")
     print("baked literals: %d, live literals: %d" % (len(bk), len(LIVE)))
@@ -449,4 +453,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if INTERP_ONLY:
+        os.makedirs(OUT, exist_ok=True)
+        print("interpreter cases: %d" % gen_interp(os.path.join(OUT, "interp_ops.c")))
+    else:
+        main()

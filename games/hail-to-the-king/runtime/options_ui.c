@@ -460,6 +460,32 @@ static void play_movie(const char *name) {
     sfd_close(m);
 }
 
+/* The one-click build prepares the game code on a second thread while this window is open
+ * (sh4_code_progress, code.h). Play waits for it: a choice to play is held until the code is
+ * ready, and a failure is reported instead of starting. */
+extern volatile int sh4_code_progress;
+static void code_gate(int *result, int *pending, SDL_Window *w) {
+    int pr = sh4_code_progress;
+    if (*result == 1 && pr < 1000) {
+        if (pr < 0) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Evil Dead: Hail to the King",
+                "The game could not be prepared from your disc. The file log.txt in the game's folder says why.", w);
+            *result = 0;
+        } else { *pending = 1; *result = -1; }
+    }
+    if (*pending && pr >= 1000) *result = 1;
+}
+static void code_status(int show) {
+    int pr = sh4_code_progress;
+    if (pr >= 0 && pr < 1000 && show) {
+        char t[96];
+        snprintf(t, sizeof t, "Preparing the game from your disc... %d%%", pr / 10);
+        ui_text(0, 480, 648, 1, 0xD8D2C8, 255, t);
+        ui_fill(330, 658, 300, 6, 0x2A2224, 255);
+        ui_fill(330, 658, 300.f * (float)pr / 1000.f, 6, 0xB3261E, 255);
+    } else if (pr < 0 && show) ui_text(0, 480, 652, 1, 0xE0453B, 255, "The game could not be prepared from your disc: see log.txt");
+}
+
 /* launcher = 1: home screen (Play, Options, Extras, Quit); 0: options only. Returns 1 = play, 0 = quit */
 static int options_window_ex(int launcher) {
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
@@ -496,6 +522,7 @@ static int options_window_ex(int launcher) {
     int btn_first = launcher ? B_SAVE : B_PLAY;
     float mx = -1, my = -1;
     int ksel = 0, kwait = -1;            /* key screen: selected row, row waiting for a key */
+    int play_pending = 0;                /* Play chosen while the game code is still being prepared */
     while (result < 0) {
         /* ---- input ---- */
         int act = 0, dx = 0, dy = 0, cancel = 0, click = 0, wheel = 0; float drag_x = 0, drag_y = 0;
@@ -528,6 +555,7 @@ static int options_window_ex(int launcher) {
             else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { mx = (float)e.button.x; my = (float)e.button.y; click = 1; }
             else if (e.type == SDL_MOUSEWHEEL) { dy = e.wheel.y > 0 ? -3 : 3; wheel = dy; }
         }
+        code_gate(&result, &play_pending, w);
         if (result >= 0) break;
         if (keys && *keys) {                                   /* scripted keys (test hook): one per frame */
             const char *c = strchr(keys, ','); size_t l = c ? (size_t)(c - keys) : strlen(keys);
@@ -783,6 +811,8 @@ static int options_window_ex(int launcher) {
                 ui_text(0, 60, 690, 0, 0x8A847C, 255, "Esc / B: back");
             }
         }
+        code_gate(&result, &play_pending, w);
+        code_status(screen == S_HOME || play_pending);
         static int shot_wait = 2;
         if (shot && (!keys || !*keys) && --shot_wait <= 0) {     /* test hook: screenshot (a frame after the last key), then close */
             uint8_t *px = malloc((size_t)ow * oh * 4);

@@ -18,7 +18,7 @@ set(GAME ${CMAKE_CURRENT_SOURCE_DIR}/..)
 file(COPY ${SDL_SRC}/include/ DESTINATION ${CMAKE_BINARY_DIR}/sdlinc/SDL2)
 
 set(RT runtime.c hw.c bios_hle.c disc.c pvr.c dma.c maple.c aica.c aica_synth.c arm7.c coro.c interp.c
-       render_gl.c upscale.c png.c textpatch.c iso9660.c sfd.c models.c hdfont.c platform_sdl.c)
+       render_gl.c upscale.c png.c textpatch.c iso9660.c sfd.c models.c hdfont.c platform_sdl.c code_aot.c)
 list(TRANSFORM RT PREPEND ${GAME}/runtime/)
 file(GLOB GEN_SRC ${GAME}/build/gen/*.c)
 add_library(main SHARED ${RT} ${GEN_SRC})
