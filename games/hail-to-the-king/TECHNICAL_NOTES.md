@@ -44,8 +44,9 @@ Debug aids: `DC_TRAP_ROM=1` (SIGTRAP on BIOS-ROM reads, run under gdb), `DC_DUMP
   (end-of-list bit on the third entry), and it never sends anything to port D. So of the eight
   save slots its Load/Save screens list (two memory-card slots per port), only six can ever be
   present; "Save Slot 7/8" (port D) are always greyed.
-- The runtime answers ports B and C as idle standard controllers with two memory cards each;
-  only port A carries the player's input.
+- By default only port A answers (two cards: Slots 1-2, eight 23-block saves each). With
+  `save_slots = 6` (or `DC_SAVE_SLOTS=6`) the runtime also answers ports B and C as idle
+  standard controllers with two memory cards each; only port A carries the player's input.
 
 ## 9. Sound effect DSP
 
