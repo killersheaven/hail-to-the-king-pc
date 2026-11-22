@@ -1,8 +1,17 @@
 /* SH-4 CPU state and instruction helpers used by recompiled code. */
 #pragma once
+#ifdef DC_JIT_GUEST
+/* compiled at launch by the built-in TinyCC, which has no C library headers */
+typedef unsigned char uint8_t; typedef unsigned short uint16_t; typedef unsigned int uint32_t; typedef unsigned long long uint64_t;
+typedef signed char int8_t; typedef short int16_t; typedef int int32_t; typedef long long int64_t;
+typedef __SIZE_TYPE__ size_t; typedef __PTRDIFF_TYPE__ intptr_t;
+void *memcpy(void *d, const void *s, size_t n);
+double sin(double); double cos(double); double sqrt(double); float sqrtf(float);
+#else
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#endif
 
 typedef struct sh4ctx {
     uint32_t r[16];
@@ -36,17 +45,28 @@ void sh4_sq_flush(sh4ctx *c, uint32_t a);
 static inline int is_ram(uint32_t a) { return ((a & 0x1C000000u) == 0x0C000000u) && (a < 0xE0000000u); }
 #define RAMP(a) (dc_ram + ((a) & 0x00FFFFFFu))
 
-static inline uint8_t  R8 (uint32_t a) { if (is_ram(a)) return *RAMP(a); return mmio_read8(a); }
-static inline uint16_t R16(uint32_t a) { if (is_ram(a)) { uint16_t v; memcpy(&v, RAMP(a), 2); return v; } return mmio_read16(a); }
-static inline uint32_t R32(uint32_t a) { if (is_ram(a)) { uint32_t v; memcpy(&v, RAMP(a), 4); return v; } return mmio_read32(a); }
 /* writes into the program image are checked against literals the recompiler baked in as constants */
 void sh4_code_write(uint32_t a);
 #define CODE_LO 0x00010000u
 #define CODE_HI 0x000C0000u
 #define CHECK_CODE_WRITE(a) do { uint32_t o_ = (a) & 0x00FFFFFFu; if (o_ - CODE_LO < CODE_HI - CODE_LO) sh4_code_write(a); } while (0)
+#ifdef __TINYC__
+/* TinyCC does not inline functions: macros keep the RAM fast path free of calls */
+#define IS_RAM_(a) ((((a) & 0x1C000000u) == 0x0C000000u) && ((a) < 0xE0000000u))
+#define R8(A)  ({ uint32_t a_ = (A); IS_RAM_(a_) ? *(uint8_t  *)RAMP(a_) : mmio_read8(a_); })
+#define R16(A) ({ uint32_t a_ = (A); IS_RAM_(a_) ? *(uint16_t *)RAMP(a_) : mmio_read16(a_); })
+#define R32(A) ({ uint32_t a_ = (A); IS_RAM_(a_) ? *(uint32_t *)RAMP(a_) : mmio_read32(a_); })
+#define W8(A, V)  do { uint32_t a_ = (A); uint8_t  v_ = (V); if (IS_RAM_(a_)) { CHECK_CODE_WRITE(a_); *(uint8_t  *)RAMP(a_) = v_; } else mmio_write8(a_, v_); } while (0)
+#define W16(A, V) do { uint32_t a_ = (A); uint16_t v_ = (V); if (IS_RAM_(a_)) { CHECK_CODE_WRITE(a_); *(uint16_t *)RAMP(a_) = v_; } else mmio_write16(a_, v_); } while (0)
+#define W32(A, V) do { uint32_t a_ = (A); uint32_t v_ = (V); if (IS_RAM_(a_)) { CHECK_CODE_WRITE(a_); *(uint32_t *)RAMP(a_) = v_; } else mmio_write32(a_, v_); } while (0)
+#else
+static inline uint8_t  R8 (uint32_t a) { if (is_ram(a)) return *RAMP(a); return mmio_read8(a); }
+static inline uint16_t R16(uint32_t a) { if (is_ram(a)) { uint16_t v; memcpy(&v, RAMP(a), 2); return v; } return mmio_read16(a); }
+static inline uint32_t R32(uint32_t a) { if (is_ram(a)) { uint32_t v; memcpy(&v, RAMP(a), 4); return v; } return mmio_read32(a); }
 static inline void W8 (uint32_t a, uint8_t  v) { if (is_ram(a)) { CHECK_CODE_WRITE(a); *RAMP(a) = v; return; } mmio_write8(a, v); }
 static inline void W16(uint32_t a, uint16_t v) { if (is_ram(a)) { CHECK_CODE_WRITE(a); memcpy(RAMP(a), &v, 2); return; } mmio_write16(a, v); }
 static inline void W32(uint32_t a, uint32_t v) { if (is_ram(a)) { CHECK_CODE_WRITE(a); memcpy(RAMP(a), &v, 4); return; } mmio_write32(a, v); }
+#endif
 
 /* ---------------- dispatch / system ---------------- */
 typedef void (*sh4fn)(sh4ctx *);
@@ -187,5 +207,7 @@ void sh4_poll_slow(sh4ctx *c);
 /* set before calling a function to enter it at one of its return addresses (thread resume) */
 extern uint32_t sh4_resume_pc;
 
-/* generated function declarations */
+/* generated function declarations (in the one-click build, only the generated code sees them) */
+#ifndef DC_JIT
 #include "funcs.h"
+#endif
