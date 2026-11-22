@@ -1,131 +1,71 @@
-/* Options window, shown before the game when the program is started with
- * --options (options.bat). #included by platform_sdl.c after the settings.ini
- * code, so it edits the same `cfg` and saves with cfg_save().
+/* The launcher (launcher.bat: --launcher) and its options shortcut
+ * (options.bat: --options). #included by platform_sdl.c after the
+ * settings.ini code, so it edits the same `cfg` and saves with cfg_save().
  *
- * Drawn with SDL's 2D renderer and stb_truetype (Courier Prime, embedded), in a
- * 960x720 logical canvas scaled to the window. Keyboard, mouse and game
- * controller all work: up/down picks a row, left/right changes it, Enter/A
- * activates a button, Esc/B cancels.
+ * The screens themselves are the Evil Dead Collection's shared launcher
+ * (kh-launcher/, the same module Fistful of Boomstick uses): this file only
+ * says what Hail to the King's options are and adds its Extras, which read
+ * documents, movies and character models from the player's own disc.
  *
- * Test hooks: DC_OPTIONS_KEYS="down,down,right,enter" feeds keys, then
- * DC_OPTIONS_SHOT=file.png saves a screenshot and closes the window.
+ * Test hooks (kh-launcher): KHL_KEYS="down,down,right,enter" feeds keys, then
+ * KHL_SHOT=file.bmp saves a screenshot and closes the window.
  */
 #include <ctype.h>
-#define STB_TRUETYPE_IMPLEMENTATION
-#define STBTT_STATIC
-#include "third_party/stb_truetype.h"
-#include "third_party/courierprime_ttf.h"
+#include <math.h>
+#include "khl.h"
 #include "third_party/stb_image.h"
 
 int png_write(const char *path, const uint8_t *rgba, int w, int h, int bottom_up);
 
-enum { UI_W = 960, UI_H = 720, NSIZES = 4 };
-static const float ui_px[NSIZES] = { 19, 25, 40, 96 };  /* small, normal, title, banner (banner: ' '..'_' only) */
-typedef struct { SDL_Texture *tex; stbtt_packedchar ch[NSIZES][96]; float scale; } ui_font;
-static SDL_Renderer *ui_r;
-static ui_font uf;
-
-static int ui_font_init(float scale) {
-    enum { AW = 2048, AH = 2048 };
-    unsigned char *bmp = calloc(AW, AH);
-    stbtt_pack_context pc;
-    if (!stbtt_PackBegin(&pc, bmp, AW, AH, 0, 1, NULL)) return 0;
-    stbtt_PackSetOversampling(&pc, 2, 2);
-    for (int s = 0; s < NSIZES; s++)
-        stbtt_PackFontRange(&pc, courierprime_ttf, 0, ui_px[s] * scale, 32, s == 3 ? 64 : 95, uf.ch[s]);
-    stbtt_PackEnd(&pc);
-    uint32_t *rgba = malloc((size_t)AW * AH * 4);
-    for (int i = 0; i < AW * AH; i++) rgba[i] = 0x00FFFFFFu | (uint32_t)bmp[i] << 24;
-    uf.tex = SDL_CreateTexture(ui_r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, AW, AH);
-    SDL_UpdateTexture(uf.tex, NULL, rgba, AW * 4);
-    SDL_SetTextureBlendMode(uf.tex, SDL_BLENDMODE_BLEND);
-    free(rgba); free(bmp);
-    uf.scale = scale;
-    return 1;
-}
-static float ui_text_w(int sz, const char *s) {
-    float w = 0;
-    for (; *s; s++) { int c = (unsigned char)*s; if (c < 32 || c > 126) c = '?'; w += uf.ch[sz][c - 32].xadvance; }
-    return w / uf.scale;
-}
-/* align: 0 left, 1 centre, 2 right; y = baseline */
-static void ui_text(int sz, float x, float y, int align, uint32_t rgb, int alpha, const char *s) {
-    if (align) x -= ui_text_w(sz, s) * (align == 1 ? 0.5f : 1.0f);
-    float px = x * uf.scale, py = y * uf.scale;
-    SDL_SetTextureColorMod(uf.tex, rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255);
-    SDL_SetTextureAlphaMod(uf.tex, (Uint8)alpha);
-    for (; *s; s++) {
-        int c = (unsigned char)*s; if (c < 32 || c > 126) c = '?';
-        stbtt_aligned_quad q;
-        stbtt_GetPackedQuad(uf.ch[sz], 1024, 1024, c - 32, &px, &py, &q, 0);
-        SDL_Rect src = { (int)(q.s0 * 1024 + 0.5f), (int)(q.t0 * 1024 + 0.5f), (int)((q.s1 - q.s0) * 1024 + 0.5f), (int)((q.t1 - q.t0) * 1024 + 0.5f) };
-        SDL_FRect dst = { q.x0 / uf.scale, q.y0 / uf.scale, (q.x1 - q.x0) / uf.scale, (q.y1 - q.y0) / uf.scale };
-        SDL_RenderCopyF(ui_r, uf.tex, &src, &dst);
-    }
-}
-static void ui_fill(float x, float y, float w, float h, uint32_t rgb, int alpha) {
-    SDL_SetRenderDrawBlendMode(ui_r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(ui_r, rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, (Uint8)alpha);
-    SDL_FRect r = { x, y, w, h }; SDL_RenderFillRectF(ui_r, &r);
-}
-static void ui_frame(float x, float y, float w, float h, uint32_t rgb, int alpha) {
-    ui_fill(x, y, w, 2, rgb, alpha); ui_fill(x, y + h - 2, w, 2, rgb, alpha);
-    ui_fill(x, y, 2, h, rgb, alpha); ui_fill(x + w - 2, y, 2, h, rgb, alpha);
-}
 /* a PNG from the textures folder as a texture; *w,*h = its size */
-static SDL_Texture *ui_load_png(const char *path, int *w, int *h) {
+static SDL_Texture *ui_load_png(SDL_Renderer *r, const char *path, int *w, int *h) {
     int n; unsigned char *px = stbi_load(path, w, h, &n, 4);
     if (!px) return NULL;
-    SDL_Texture *t = SDL_CreateTexture(ui_r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, *w, *h);
-    SDL_UpdateTexture(t, NULL, px, *w * 4);
-    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+    SDL_Texture *t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, *w, *h);
+    if (t) { SDL_UpdateTexture(t, NULL, px, *w * 4); SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND); }
     stbi_image_free(px);
     return t;
 }
 
-/* ---- the rows ---- */
+/* ---- the options ---- */
 enum { R_DISPLAY, R_MONITOR, R_WINDOW, R_RENDER, R_ASPECT, R_FILTER, R_HD, R_UI, R_PROMPTS,
        R_KEYS, R_IMMORTAL, R_AMMO, R_FUEL, R_BLADE, NROWS };
-static const char *row_label[NROWS] = { "Display", "Monitor", "Window size", "Render resolution", "Aspect ratio",
-                                        "Texture filtering", "HD art", "Menu sharpening", "Button prompts", "Keyboard controls",
-                                        "Cheat: Immortality", "Cheat: Unlimited ammo", "Cheat: Unlimited fuel", "Cheat: Damascene blade" };
-static const char *row_help[NROWS][2] = {
-    { "Fullscreen uses your monitor's own resolution.", "Windowed opens a resizable window (F11 switches in game)." },
-    { "Which monitor to use for fullscreen.", "" },
-    { "Size of the window when not fullscreen.", "You can also resize the window by dragging its edges." },
-    { "Internal resolution the game is drawn at.", "Auto matches your screen, which is the sharpest." },
-    { "4:3 keeps the original shape with black bars on wide", "screens. Stretch fills the screen (wider image)." },
-    { "Smooth is the original look. Sharp shows the game's", "textures as unfiltered pixels." },
-    { "High-resolution replacements for the game's own images", "(textures folder). Off shows the original images." },
-    { "Sharpens menu and HUD art at high resolutions when no", "HD image replaces it. Text only is recommended." },
-    { "Which controller's buttons the menus show. Buttons are", "matched by position: the bottom button is the 'A' button." },
-    { "Choose which keys act as the Dreamcast pad's buttons.", "Press Enter to change them." },
-    { "Testing aid: Ash's health stays full.", "" },
-    { "Testing aid: Knowby's pistol always has 999 rounds.", "" },
-    { "Testing aid: the chainsaw never runs out of fuel.", "" },
-    { "Testing aid: the chainsaw has the Damascene Steel blade", "from the start." } };
-/* what each option does in this release: 0 works, 1 partly, 2 not yet */
-static const struct { int lvl; const char *text; } row_status[NROWS] = {
-    { 0, "Works." }, { 0, "Works." }, { 0, "Works." }, { 0, "Works." }, { 0, "Works." }, { 0, "Works." },
-    { 0, "Works: HD font and legal screen. The title screen keeps its original art." },
-    { 0, "Works." },
-    { 0, "Works." },
-    { 0, "Works." },
-    { 0, "Works (testing aid)." }, { 0, "Works (testing aid)." }, { 0, "Works (testing aid)." }, { 0, "Works (testing aid)." } };
-static const struct { int lvl; const char *text; } ex_status[5] = {
-    { 0, "Works." },
-    { 1, "Partly: the 56 Sofdec movies play; the 62 AVI movies not yet." },
-    { 1, "Partly: 35 characters, rest pose only (no animations yet)." },
-    { 0, "" }, { 0, "" } };
-static const char *status_tag[4] = { "", "PARTIAL", "NOT YET", "PC ONLY" };
-static const uint32_t status_rgb[4] = { 0x7FB069, 0xE0A040, 0xE0453B, 0x8A847C };
-typedef struct { int lvl; const char *text; } row_st_t;
-static row_st_t row_st(int r) {           /* the status shown for an option row on this platform */
+static const khl_row rows_display[] = {
+    { "Display", "Fullscreen uses your monitor's own resolution.\nWindowed opens a resizable window (F11 switches in game).", KHL_ROW_CHOICE, R_DISPLAY, 0 },
+    { "Monitor", "Which monitor to use for fullscreen.", KHL_ROW_CHOICE, R_MONITOR, 0 },
+    { "Window size", "Size of the window when not fullscreen.\nYou can also resize the window by dragging its edges.", KHL_ROW_CHOICE, R_WINDOW, 0 },
+    { "Render resolution", "Internal resolution the game is drawn at.\nAuto matches your screen, which is the sharpest.", KHL_ROW_CHOICE, R_RENDER, 0 },
+    { "Aspect ratio", "4:3 keeps the original shape with black bars on wide\nscreens. Stretch fills the screen (wider image).", KHL_ROW_CHOICE, R_ASPECT, 0 },
+    { "Texture filtering", "Smooth is the original look. Sharp shows the game's\ntextures as unfiltered pixels.", KHL_ROW_CHOICE, R_FILTER, 0 },
+    { "HD art", "High-resolution replacements for the game's own images\n(textures folder). Off shows the original images.", KHL_ROW_CHOICE, R_HD, 0 },
+    { "Menu sharpening", "Sharpens menu and HUD art at high resolutions when no\nHD image replaces it. Text only is recommended.", KHL_ROW_CHOICE, R_UI, 0 },
+};
+static const khl_row rows_controls[] = {
+    { "Keyboard controls", "Choose which keys act as the Dreamcast pad's buttons.\nPress Enter to change them.", KHL_ROW_BINDS, R_KEYS, 0 },
+    { "Button prompts", "Which controller's buttons the menus show. Buttons are\nmatched by position: the bottom button is the 'A' button.", KHL_ROW_CHOICE, R_PROMPTS, 0 },
+};
+static const khl_row rows_cheats[] = {
+    { "Immortality", "Testing aid: Ash's health stays full.", KHL_ROW_CHOICE, R_IMMORTAL, 0 },
+    { "Unlimited ammo", "Testing aid: Knowby's pistol always has 999 rounds.", KHL_ROW_CHOICE, R_AMMO, 0 },
+    { "Unlimited fuel", "Testing aid: the chainsaw never runs out of fuel.", KHL_ROW_CHOICE, R_FUEL, 0 },
+    { "Damascene blade", "Testing aid: the chainsaw has the Damascene Steel blade\nfrom the start.", KHL_ROW_CHOICE, R_BLADE, 0 },
+};
+enum { PAGE_DISPLAY, PAGE_CONTROLS, PAGE_CHEATS };
+static const khl_page pages[] = {
+    { "Display", (int)(sizeof rows_display / sizeof *rows_display), rows_display },
+    { "Controls", (int)(sizeof rows_controls / sizeof *rows_controls), rows_controls },
+    { "Cheats", (int)(sizeof rows_cheats / sizeof *rows_cheats), rows_cheats },
+};
+
+/* what each option does in this release, on this platform */
+static void row_status(int r, int *lvl, const char **text) {
+    *lvl = KHL_WORKS; *text = "Works.";
 #ifdef __ANDROID__
-    if (r == R_DISPLAY || r == R_MONITOR || r == R_WINDOW) { row_st_t t = { 3, "PC only: on Android the game always fills the screen." }; return t; }
-    if (r == R_ASPECT) { row_st_t t = { 0, "Works: 4:3 puts black bars at the sides of a wide phone screen." }; return t; }
+    if (r == R_DISPLAY || r == R_MONITOR || r == R_WINDOW) { *lvl = KHL_PC_ONLY; *text = "PC only: on Android the game always fills the screen."; return; }
+    if (r == R_ASPECT) { *text = "Works: 4:3 puts black bars at the sides of a wide phone screen."; return; }
 #endif
-    row_st_t t = { row_status[r].lvl, row_status[r].text }; return t;
+    if (r == R_HD) *text = "Works: HD font and legal screen. The title screen keeps its original art.";
+    else if (r >= R_IMMORTAL) *text = "Works (testing aid).";
 }
 static const char *disp_names[2] = { "Fullscreen", "Windowed" };
 static const char *aspect_names[2] = { "4:3 (original)", "Stretch to fill" };
@@ -153,7 +93,7 @@ static void row_value(int r, char *out, size_t n) {
     case R_HD: snprintf(out, n, "%s", onoff_names[!cfg.hd]); break;
     case R_UI: snprintf(out, n, "%s", ui_names[cfg.ui_mode]); break;
     case R_PROMPTS: snprintf(out, n, "%s", prompt_label[cfg.prompts & 3]); break;
-    case R_KEYS: snprintf(out, n, "Change..."); break;
+    case R_KEYS: out[0] = 0; break;                    /* the launcher shows "Enter to change" */
     default: snprintf(out, n, "%s", cfg.cheats >> (r - R_IMMORTAL) & 1 ? "On" : "Off"); break;
     }
 }
@@ -161,7 +101,7 @@ static void row_change(int r, int d) {
     switch (r) {
     case R_DISPLAY: cfg.fullscreen = !cfg.fullscreen; break;
     case R_MONITOR: { int nd = SDL_GetNumVideoDisplays(); if (nd < 1) nd = 1; cfg.monitor = (cfg.monitor + d + nd) % nd; break; }
-    case R_WINDOW: {
+    case R_WINDOW: {      /* the sizes that fit the monitor */
         SDL_DisplayMode dm; int mw = 1 << 30, mh = 1 << 30;
         if (SDL_GetDesktopDisplayMode(cfg.monitor, &dm) == 0) { mw = dm.w; mh = dm.h; }
         int cur = -1, cnt = 0, fit[NWIN];
@@ -177,11 +117,28 @@ static void row_change(int r, int d) {
     case R_HD: cfg.hd = !cfg.hd; break;
     case R_UI: cfg.ui_mode = (cfg.ui_mode + d + 3) % 3; break;
     case R_PROMPTS: cfg.prompts = (cfg.prompts + d + 4) & 3; break;
+    case R_KEYS: break;
     default: cfg.cheats ^= 1 << (r - R_IMMORTAL); break;
     }
 }
 
-/* button icons for the preview: the sheet's icon row holds Y B A X (top, right, bottom, left) */
+/* ---- keyboard controls: keymap (platform_sdl.c), saved as key_* in settings.ini ---- */
+static const char *key_row_label(int i) { return key_label[i]; }
+static void key_row_value(int i, char *out, size_t n) { snprintf(out, n, "%s", SDL_GetScancodeName(keymap[i])); }
+static int key_row_set(int i, const SDL_Event *e) {
+    SDL_Scancode sc = e->key.keysym.scancode;
+    if (key_reserved(sc)) return -1;                   /* Esc and F8-F12 are the hotkeys */
+    for (int k = 0; k < NKEYS; k++) if (k != i && keymap[k] == sc) keymap[k] = keymap[i];   /* a key in use swaps */
+    keymap[i] = sc;
+    return 1;
+}
+static void key_rows_reset(void) { memcpy(keymap, key_default, sizeof keymap); }
+static const khl_binds binds[] = {
+    { "Keyboard controls", "Enter: change the key. A key already in use swaps with this one.\nEsc and F8-F12 stay hotkeys. Save on the Options screen to keep it.",
+      KHL_CAPTURE_KEY, NKEYS, key_row_label, key_row_value, key_row_set, NULL, NULL, key_rows_reset },
+};
+
+/* ---- button icons for the prompts preview: the sheet's icon row holds Y B A X (top, right, bottom, left) ---- */
 static SDL_Texture *icon_tex[4]; static int icon_scale[4];
 static const uint32_t icon_rgb[4][4] = {
     { 0x3FB54A, 0x2D7DD2, 0xE0333A, 0xF2C21B },    /* Dreamcast: Y green, B blue, A red, X yellow */
@@ -189,17 +146,17 @@ static const uint32_t icon_rgb[4][4] = {
     { 0x3BB89A, 0xE5505A, 0x6A8CE8, 0xD98ACB },    /* PlayStation */
     { 0xE8E8E8, 0xE8E8E8, 0xE8E8E8, 0xE8E8E8 } };  /* Switch */
 static int icon_y0[4];
-static void load_icons(const char *base) {
+static void load_icons(SDL_Renderer *r, const char *base) {
     static const char *dirs[4] = { "", "prompts/xbox/hd/", "prompts/playstation/hd/", "prompts/switch/hd/" };
     for (int i = 0; i < 4; i++) {
         char p[1200]; int w, h;
         snprintf(p, sizeof p, "%stextures/%s9B28D9CBB4D57B31_256x256.png", base, dirs[i]);
-        icon_tex[i] = ui_load_png(p, &w, &h);
+        icon_tex[i] = ui_load_png(r, p, &w, &h);
         icon_scale[i] = icon_tex[i] ? w / 256 : 0; icon_y0[i] = 144;
         if (!icon_tex[i]) {   /* release builds: just the four icons (prompticons.py), 4x */
             static const char *st[4] = { "dreamcast", "xbox", "playstation", "switch" };
             snprintf(p, sizeof p, "%stextures/prompts/%s/icons.png", base, st[i]);
-            icon_tex[i] = ui_load_png(p, &w, &h); icon_scale[i] = 4; icon_y0[i] = 0;
+            icon_tex[i] = ui_load_png(r, p, &w, &h); icon_scale[i] = 4; icon_y0[i] = 0;
         }
     }
 }
@@ -213,10 +170,11 @@ static void draw_pad(float cx, float cy, int style) {
         SDL_FRect dst = { cx + off[k][0] - 18, cy + off[k][1] - 24, 36, 48 };
         uint32_t c = icon_rgb[style][k];
         SDL_SetTextureColorMod(t, c >> 16 & 255, c >> 8 & 255, c & 255); SDL_SetTextureAlphaMod(t, 255);
-        SDL_RenderCopyF(ui_r, t, &src, &dst);
+        SDL_RenderCopyF(khl_renderer(), t, &src, &dst);
     }
 }
 
+/* ---- the Extras ---- */
 /* ---- documents from the player's disc (AZ01.DC text table): "Title@@Body", '@' = new line, '^' = apostrophe ---- */
 uint8_t *iso_load(const char *path, uint32_t *size_out);
 typedef struct { char title[64]; char *body; } ui_doc;
@@ -249,47 +207,6 @@ static void load_docs(void) {
     free(d);
     fprintf(stderr, "[launcher] %d documents\n", ndocs);
 }
-/* word-wrap s into lines no wider than w (logical px) at size sz */
-static int wrap(int sz, const char *s, float w, char lines[][96], int maxl) {
-    int n = 0; char cur[96] = ""; 
-    while (*s && n < maxl) {
-        if (*s == '\n') { snprintf(lines[n++], 96, "%s", cur); cur[0] = 0; s++; continue; }
-        const char *e = s; while (*e && *e != ' ' && *e != '\n') e++;
-        char word[96]; size_t l = (size_t)(e - s) < 95 ? (size_t)(e - s) : 95; memcpy(word, s, l); word[l] = 0;
-        char trial[200]; snprintf(trial, sizeof trial, "%s%s%s", cur, cur[0] ? " " : "", word);
-        if (ui_text_w(sz, trial) > w && cur[0]) { snprintf(lines[n++], 96, "%s", cur); snprintf(cur, sizeof cur, "%s", word); }
-        else snprintf(cur, sizeof cur, "%.95s", trial);
-        s = e; if (*s == ' ') s++;
-    }
-    if (cur[0] && n < maxl) snprintf(lines[n++], 96, "%s", cur);
-    return n;
-}
-#ifndef HTTK_VERSION
-#define HTTK_VERSION "0.15.0"
-#endif
-static const char *about_text =
-    "Evil Dead: Hail to the King (Dreamcast, 2000) by Heavy Iron Studios and THQ, "
-    "running natively on this computer through static recompilation: the game's own "
-    "SH-4 machine code is translated to C ahead of time and runs on an emulation of "
-    "the Dreamcast's graphics, sound and controller hardware.\n\n"
-    "Version " HTTK_VERSION ". Unofficial recompilation (c) 2026 Killers' Heaven, "
-    "free software under the GNU GPL v3.\n\n"
-    "All game content is read from your own disc image; none is included.\n\n"
-    "Fonts: Courier Prime and EB Garamond (SIL Open Font License). "
-    "Libraries: SDL2, pl_mpeg, stb_image and stb_truetype. Cheat addresses from the published "
-    "Dreamcast CodeBreaker codes.\n\n"
-    "Evil Dead and its related characters are trademarks of their respective owners. "
-    "This port is not affiliated with or endorsed by them.";
-
-enum { B_PLAY, B_SAVE, B_CANCEL, NBTN };
-static const char *btn_label_opt[NBTN] = { "Play", "Save and close", "Cancel" };
-static const char *btn_label_launch[NBTN] = { "Play", "Save", "Cancel" };
-static const float btn_x[NBTN] = { 60, 220, 500 }, btn_w[NBTN] = { 140, 260, 160 };
-#define ROW_Y0 132.0f
-#define ROW_H 31.0f
-#define BTN_Y 672.0f
-enum { S_HOME, S_OPTIONS, S_EXTRAS, S_DOCS, S_READ, S_ABOUT, S_MOVIES, S_MODELS, S_KEYS };
-
 /* ---- model viewer: the game's characters, read from the disc (models.c) ---- */
 #include "models.h"
 static model_ent ments[96]; static int nments;
@@ -330,7 +247,7 @@ static void model_select(int i) {
     mcur = model_load(&ments[i]);
     m_props = 0;      /* alternate parts (Ash has 13 hands, one per weapon grip) are hidden until Enter */
     if (mcur && mcur->tex) {
-        mtex = SDL_CreateTexture(ui_r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, mcur->tw, mcur->th);
+        mtex = SDL_CreateTexture(khl_renderer(), SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, mcur->tw, mcur->th);
         if (mtex) { SDL_UpdateTexture(mtex, NULL, mcur->tex, mcur->tw * 4); SDL_SetTextureBlendMode(mtex, SDL_BLENDMODE_BLEND); SDL_SetTextureScaleMode(mtex, SDL_ScaleModeLinear); }
     }
 }
@@ -379,12 +296,11 @@ static void model_draw(float bx, float by, float bw, float bh) {
     static SDL_Vertex *sorted; static size_t scap;
     if (k > scap) { scap = k; sorted = realloc(sorted, scap * sizeof *sorted); }
     for (size_t i = 0; i < t; i++) memcpy(&sorted[i * 3], &vb[tb[i].a], 3 * sizeof *vb);
-    SDL_Rect clip = { (int)bx, (int)by, (int)bw, (int)bh }; SDL_RenderSetClipRect(ui_r, &clip);
-    if (SDL_RenderGeometry(ui_r, mtex, sorted, (int)k, NULL, 0) < 0) { static int w; if (!w++) fprintf(stderr, "[models] draw failed: %s\n", SDL_GetError()); }
+    SDL_Rect clip = { (int)bx, (int)by, (int)bw, (int)bh }; SDL_RenderSetClipRect(khl_renderer(), &clip);
+    if (SDL_RenderGeometry(khl_renderer(), mtex, sorted, (int)k, NULL, 0) < 0) { static int w; if (!w++) fprintf(stderr, "[models] draw failed: %s\n", SDL_GetError()); }
     { static int once; if (!once++ && getenv("DC_MODELS_DEBUG")) fprintf(stderr, "[models] %zu verts, first at %.1f,%.1f tex %p\n", k, k ? sorted[0].position.x : 0.f, k ? sorted[0].position.y : 0.f, (void *)mtex); }
-    SDL_RenderSetClipRect(ui_r, NULL);
+    SDL_RenderSetClipRect(khl_renderer(), NULL);
 }
-
 /* ---- cutscenes: the disc's Sofdec movies (sfd.c) ---- */
 #include "third_party/pl_mpeg.h"
 typedef struct sfd_t sfd_t;
@@ -436,399 +352,195 @@ static void play_movie(const char *name) {
             if (!tex || tw != (int)f->width || th != (int)f->height) {
                 if (tex) SDL_DestroyTexture(tex);
                 tw = (int)f->width; th = (int)f->height;
-                tex = SDL_CreateTexture(ui_r, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, tw, th);
+                tex = SDL_CreateTexture(khl_renderer(), SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, tw, th);
             }
             SDL_UpdateYUVTexture(tex, NULL, f->y.data, (int)f->y.width, f->cb.data, (int)f->cb.width, f->cr.data, (int)f->cr.width);
             shown++; fresh = 1;
         }
         if (stop) break;
         if (fresh) {
-            SDL_SetRenderDrawColor(ui_r, 0, 0, 0, 255); SDL_RenderClear(ui_r);
+            SDL_SetRenderDrawColor(khl_renderer(), 0, 0, 0, 255); SDL_RenderClear(khl_renderer());
             if (tex) {   /* keep the movie's 4:3 shape */
-                int w = UI_W, h = UI_W * 3 / 4; if (h > UI_H) { h = UI_H; w = UI_H * 4 / 3; }
-                SDL_Rect dst = { (UI_W - w) / 2, (UI_H - h) / 2, w, h }; SDL_RenderCopy(ui_r, tex, NULL, &dst); }
+                int w = KHL_CANVAS_W, h = KHL_CANVAS_W * 3 / 4; if (h > KHL_CANVAS_H) { h = KHL_CANVAS_H; w = KHL_CANVAS_H * 4 / 3; }
+                SDL_Rect dst = { (KHL_CANVAS_W - w) / 2, (KHL_CANVAS_H - h) / 2, w, h }; SDL_RenderCopy(khl_renderer(), tex, NULL, &dst); }
             if (shot && shown >= shot_frame && shot_frame >= 0) {
-                int ow, oh; SDL_GetRendererOutputSize(ui_r, &ow, &oh);
-                uint8_t *px = malloc((size_t)ow * oh * 4); SDL_RenderReadPixels(ui_r, NULL, SDL_PIXELFORMAT_ABGR8888, px, ow * 4);
+                int ow, oh; SDL_GetRendererOutputSize(khl_renderer(), &ow, &oh);
+                uint8_t *px = malloc((size_t)ow * oh * 4); SDL_RenderReadPixels(khl_renderer(), NULL, SDL_PIXELFORMAT_ABGR8888, px, ow * 4);
                 png_write(shot, px, ow, oh, 0); free(px); fprintf(stderr, "[movie] %s frame %ld saved\n", name, shown); stop = 1;
             }
-            SDL_RenderPresent(ui_r);
+            SDL_RenderPresent(khl_renderer());
         } else SDL_Delay(2);
     }
     if (ad) SDL_CloseAudioDevice(ad);
     if (tex) SDL_DestroyTexture(tex);
     sfd_close(m);
 }
+static int docs_count(void) { return ndocs; }
+static void docs_item(int i, char *out, size_t n) { snprintf(out, n, "%s", docs[i].title); }
+static const char *docs_text(int i) { return docs[i].body; }
 
-/* The one-click build prepares the game code on a second thread while this window is open
- * (sh4_code_progress, code.h). Play waits for it: a choice to play is held until the code is
- * ready, and a failure is reported instead of starting. */
+static int movies_count(void) { return nmovies; }
+static void movies_item(int i, char *out, size_t n) {
+    char nm[16]; snprintf(nm, sizeof nm, "%s", movies[i].name);
+    char *dot = strchr(nm, '.'); if (dot) *dot = 0;
+    snprintf(out, n, "%s  %.1f MB", nm, movies[i].size / 1048576.0);
+}
+static void movies_run(int i) { play_movie(movies[i].name); }
+
+/* the model viewer: a list on the left, the model turning on the right */
+static int models_count(void) { return nments; }
+static int models_sel, models_top;
+static void models_enter(void) { models_sel = models_top = 0; model_select(0); }
+static int models_frame(const khl_input *in) {
+    enum { VIS = 15 };
+    int i;
+    if (in->cancel) return 1;
+    for (i = 0; i < VIS && models_top + i < nments; i++)
+        if (in->mx >= 0 && in->my >= 150 + i * 34 - 25 && in->my < 150 + i * 34 + 9 && in->mx > 40 && in->mx < 360) models_sel = models_top + i;
+    if (in->dy && !in->wheel) models_sel += in->dy > 0 ? 1 : -1;
+    if (in->wheel && in->mx > 380) m_zoom *= in->wheel < 0 ? 1.12f : 1 / 1.12f;     /* the wheel over the model zooms */
+    else if (in->wheel) models_sel += in->wheel > 0 ? 3 : -3;
+    if (models_sel >= nments) models_sel = nments - 1;
+    if (models_sel < 0) models_sel = 0;
+    if (models_sel < models_top) models_top = models_sel;
+    if (models_sel >= models_top + VIS) models_top = models_sel - VIS + 1;
+    model_select(models_sel);
+    {   /* turn, tilt and zoom: held keys, the sticks and triggers, or a drag over the model */
+        const Uint8 *ks = SDL_GetKeyboardState(NULL);
+        float spin = 0, tilt = 0, zm = 0, drag_x = in->mx > 380 ? in->drag_x : 0, drag_y = in->mx > 380 ? in->drag_y : 0;
+        if (ks[SDL_SCANCODE_LEFT] || ks[SDL_SCANCODE_A]) spin -= 1;
+        if (ks[SDL_SCANCODE_RIGHT] || ks[SDL_SCANCODE_D]) spin += 1;
+        if (ks[SDL_SCANCODE_W]) tilt += 1;
+        if (ks[SDL_SCANCODE_S]) tilt -= 1;
+        if (ks[SDL_SCANCODE_EQUALS] || ks[SDL_SCANCODE_KP_PLUS] || ks[SDL_SCANCODE_PAGEUP]) zm += 1;
+        if (ks[SDL_SCANCODE_MINUS] || ks[SDL_SCANCODE_KP_MINUS] || ks[SDL_SCANCODE_PAGEDOWN]) zm -= 1;
+        if (in->pad) {
+            float rx = SDL_GameControllerGetAxis(in->pad, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.f, ry = SDL_GameControllerGetAxis(in->pad, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.f;
+            float lx2 = SDL_GameControllerGetAxis(in->pad, SDL_CONTROLLER_AXIS_LEFTX) / 32767.f;
+            if (fabsf(rx) > 0.2f) spin += rx; else if (fabsf(lx2) > 0.3f) spin += lx2;
+            if (fabsf(ry) > 0.2f) tilt -= ry;
+            zm += SDL_GameControllerGetAxis(in->pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) / 32767.f - SDL_GameControllerGetAxis(in->pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) / 32767.f;
+        }
+        static Uint32 idle_since; Uint32 now = SDL_GetTicks();
+        if (spin || tilt || zm || drag_x || drag_y) idle_since = now;
+        m_yaw += spin * 0.035f + drag_x * 0.01f; m_pitch += tilt * 0.025f + drag_y * 0.01f;
+        if (m_pitch > 1.4f) m_pitch = 1.4f;
+        if (m_pitch < -1.4f) m_pitch = -1.4f;
+        m_zoom *= 1 + zm * 0.02f; if (m_zoom < 0.3f) m_zoom = 0.3f; if (m_zoom > 6) m_zoom = 6;
+        if (now - idle_since > 2500) m_yaw += 0.006f;                 /* turn slowly when left alone */
+    }
+    if (in->act) m_props = !m_props;
+    khl_header("Models", "Read from your disc");
+    for (i = 0; i < VIS && models_top + i < nments; i++) {
+        float y = 150 + i * 34; int on = models_sel == models_top + i;
+        char lbl[48]; ment_label(models_top + i, lbl, sizeof lbl);
+        if (on) khl_selbar(40, y - 25, 330, 32);
+        khl_text(KHL_SMALL, 60, y - 2, KHL_LEFT, on ? 0xFFFFFF : 0xD8D2C8, lbl);
+    }
+    khl_fill(390, 120, 540, 540, 0x0A080A, 235);
+    if (mcur) {
+        char info[96]; int tris = 0;
+        model_draw(390, 120, 540, 540);
+        for (i = 0; i < mcur->nparts; i++) if (i == mcur->body || m_props || mcur->parts[i].primary) tris += mcur->parts[i].nt;
+        snprintf(info, sizeof info, "%s  -  %d triangles%s", ments[models_sel].file, tris, mcur->nparts > 1 ? (m_props ? "  -  all parts" : "") : "");
+        khl_text(KHL_SMALL, 920, 650, KHL_RIGHT, 0x8A847C, info);
+    } else khl_text(KHL_NORMAL, 660, 400, KHL_CENTRE, 0x8A847C, "Couldn't read this one");
+    khl_keys_line("Left/Right, drag: turn   +/-, wheel: zoom   Enter: all parts   Esc: back");
+    return 0;
+}
+
+static const khl_extra extras[] = {
+    { "Documents", "Every note, journal and page Ash can find, read from your disc.", KHL_WORKS, NULL, NULL,
+      docs_count, docs_item, docs_text, NULL, 1, "Found on your disc", "Enter / A: read     Esc / B: back", NULL, NULL },
+    { "Cutscenes", "Watch the game's movies, played from your disc.", KHL_PARTIAL, "Partly: the 56 Sofdec movies play; the 62 AVI movies not yet.", NULL,
+      movies_count, movies_item, NULL, movies_run, 3, "Played from your disc", "Enter / A: play     Esc / B: back (also stops a movie)", NULL, NULL },
+    { "Models", "Turn and inspect the game's characters, read from your disc.", KHL_PARTIAL, "Partly: 35 characters, rest pose only (no animations yet).", NULL,
+      models_count, NULL, NULL, NULL, 0, NULL, NULL, models_enter, models_frame },
+};
+
+#ifndef HTTK_VERSION
+#define HTTK_VERSION "0.16.0"
+#endif
+static const char *about_text =
+    "Evil Dead: Hail to the King (Dreamcast, 2000) by Heavy Iron Studios and THQ, "
+    "running natively on this computer through static recompilation: the game's own "
+    "SH-4 machine code is translated to C ahead of time and runs on an emulation of "
+    "the Dreamcast's graphics, sound and controller hardware.\n\n"
+    "Version " HTTK_VERSION ". Unofficial recompilation (c) 2026 Killers' Heaven, "
+    "free software under the GNU GPL v3.\n\n"
+    "All game content is read from your own disc image; none is included.\n\n"
+    "Fonts: Courier Prime and EB Garamond (SIL Open Font License). "
+    "Libraries: SDL2, pl_mpeg, stb_image and stb_truetype. Cheat addresses from the published "
+    "Dreamcast CodeBreaker codes.\n\n"
+    "Evil Dead and its related characters are trademarks of their respective owners. "
+    "This port is not affiliated with or endorsed by them.";
+
+/* The one-click build prepares the game code on a second thread while the launcher is
+ * open (sh4_code_progress, code.h: 0..1000, or below 0 on failure). Play waits for it. */
 extern volatile int sh4_code_progress;
-static void code_gate(int *result, int *pending, SDL_Window *w) {
+static int ui_play(void) {
     int pr = sh4_code_progress;
-    if (*result == 1 && pr < 1000) {
-        if (pr < 0) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Evil Dead: Hail to the King",
-                "The game could not be prepared from your disc. The file log.txt in the game's folder says why.", w);
-            *result = 0;
-        } else { *pending = 1; *result = -1; }
+    if (pr >= 1000) return KHL_PLAY_GO;
+    if (pr < 0) { khl_message(KHL_NOT_YET, "Couldn't prepare the game from your disc: see log.txt."); return KHL_PLAY_STAY; }
+    return KHL_PLAY_WAIT;
+}
+static void ui_overlay(int screen, int page, int id, int waiting) {
+    int pr = sh4_code_progress;
+    (void)id;
+    if (screen == KHL_SCREEN_HOME || waiting) {      /* how far the game code has got */
+        if (pr >= 0 && pr < 1000) {
+            char t[96];
+            snprintf(t, sizeof t, "Preparing the game from your disc... %d%%", pr / 10);
+            khl_text(KHL_SMALL, 480, 648, KHL_CENTRE, 0xD8D2C8, t);
+            khl_fill(330, 658, 300, 6, 0x2A2224, 255);
+            khl_fill(330, 658, 300.f * (float)pr / 1000.f, 6, 0xB3261E, 255);
+        } else if (pr < 0) khl_text(KHL_SMALL, 480, 652, KHL_CENTRE, 0xE0453B, "The game could not be prepared from your disc: see log.txt");
     }
-    if (*pending && pr >= 1000) *result = 1;
-}
-static void code_status(int show) {
-    int pr = sh4_code_progress;
-    if (pr >= 0 && pr < 1000 && show) {
-        char t[96];
-        snprintf(t, sizeof t, "Preparing the game from your disc... %d%%", pr / 10);
-        ui_text(0, 480, 648, 1, 0xD8D2C8, 255, t);
-        ui_fill(330, 658, 300, 6, 0x2A2224, 255);
-        ui_fill(330, 658, 300.f * (float)pr / 1000.f, 6, 0xB3261E, 255);
-    } else if (pr < 0 && show) ui_text(0, 480, 652, 1, 0xE0453B, 255, "The game could not be prepared from your disc: see log.txt");
+    if (screen == KHL_SCREEN_OPTIONS && page == PAGE_CONTROLS && icon_tex[cfg.prompts & 3]) {   /* the menus' buttons, as chosen */
+        draw_pad(700, 360, cfg.prompts & 3);
+        khl_text(KHL_SMALL, 700, 440, KHL_CENTRE, 0x8A847C, prompt_label[cfg.prompts & 3]);
+    }
 }
 
-/* launcher = 1: home screen (Play, Options, Extras, Quit); 0: options only. Returns 1 = play, 0 = quit */
-static int options_window_ex(int launcher) {
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
-    float dpi = 96; SDL_GetDisplayDPI(cfg.monitor < SDL_GetNumVideoDisplays() ? cfg.monitor : 0, &dpi, NULL, NULL);
-    float f = dpi > 96 ? dpi / 96 : 1;
-    SDL_DisplayMode dm; int ww = (int)(UI_W * f), wh = (int)(UI_H * f);
-    if (SDL_GetDesktopDisplayMode(0, &dm) == 0 && wh > dm.h * 85 / 100) { wh = dm.h * 85 / 100; ww = wh * UI_W / UI_H; }
-    SDL_Window *w = SDL_CreateWindow(launcher ? "Evil Dead: Hail to the King" : "Evil Dead: Hail to the King - Options",
-                                     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ww, wh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    if (!w) { fprintf(stderr, "[options] window: %s\n", SDL_GetError()); return 1; }
-    ui_r = SDL_CreateRenderer(w, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!ui_r) ui_r = SDL_CreateRenderer(w, -1, SDL_RENDERER_SOFTWARE);
-    if (!ui_r) { fprintf(stderr, "[options] renderer: %s\n", SDL_GetError()); SDL_DestroyWindow(w); return 1; }
-    int ow, oh; SDL_GetRendererOutputSize(ui_r, &ow, &oh);
-    SDL_RenderSetLogicalSize(ui_r, UI_W, UI_H);
-    float sc = (float)ow / UI_W < (float)oh / UI_H ? (float)ow / UI_W : (float)oh / UI_H;
-    if (!ui_font_init(sc < 1 ? 1 : sc)) return 1;
-
-    char base[1024] = ""; { char *b = SDL_GetBasePath(); if (b) { snprintf(base, sizeof base, "%s", b); SDL_free(b); } }
+static char ui_base[1024];
+/* the title art (with the HD logo) behind the menus, if the textures folder has it */
+static SDL_Texture *ui_background(SDL_Renderer *r, SDL_Rect *src) {
     char p[1200]; int bw = 0, bh = 0;
-    snprintf(p, sizeof p, "%stextures/3BA3ED33C3D7FC12_512x256.png", base);
-    SDL_Texture *bg = ui_load_png(p, &bw, &bh);          /* title art (with the HD logo), if present */
-    load_icons(base);
-    if (launcher) { load_docs(); nmovies = 0; iso_list_cb(movie_cb, NULL); nments = models_scan(ments, 96); qsort(ments, (size_t)nments, sizeof *ments, ment_cmp);
-        if (getenv("DC_MOVIE_DIR")) { movie_cb("AX00.SFD", 4u << 20, NULL); movie_cb("AX01A.SFD", 40u << 20, NULL); } }
-
-    SDL_GameController *pad = NULL;
-    for (int i = 0; i < SDL_NumJoysticks(); i++) if (SDL_IsGameController(i)) { pad = SDL_GameControllerOpen(i); break; }
-    int screen = launcher ? S_HOME : S_OPTIONS, sel = 0, btn = launcher ? B_SAVE : B_PLAY, result = -1;
-    int home_sel = 0, extras_sel = 0, doc_sel = 0, doc_top = 0, read_top = 0, nlines = 0;
-    static char lines[400][96];
-    const char *keys = getenv("DC_OPTIONS_KEYS"), *shot = getenv("DC_OPTIONS_SHOT");
-    const char **btn_label = launcher ? btn_label_launch : btn_label_opt;
-    int btn_first = launcher ? B_SAVE : B_PLAY;
-    float mx = -1, my = -1;
-    int ksel = 0, kwait = -1;            /* key screen: selected row, row waiting for a key */
-    int play_pending = 0;                /* Play chosen while the game code is still being prepared */
-    while (result < 0) {
-        /* ---- input ---- */
-        int act = 0, dx = 0, dy = 0, cancel = 0, click = 0, wheel = 0; float drag_x = 0, drag_y = 0;
-        SDL_Event e;
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) { result = 0; break; }
-            else if (e.type == SDL_KEYDOWN && screen == S_KEYS && kwait >= 0) {   /* capturing a key */
-                SDL_Scancode sc = e.key.keysym.scancode;
-                if (sc != SDL_SCANCODE_ESCAPE && sc != SDL_SCANCODE_AC_BACK && !key_reserved(sc)) {
-                    for (int i = 0; i < NKEYS; i++) if (i != kwait && keymap[i] == sc) keymap[i] = keymap[kwait];   /* swap */
-                    keymap[kwait] = sc;
-                }
-                kwait = -1;
-            }
-            else if (e.type == SDL_KEYDOWN) {
-                SDL_Keycode k = e.key.keysym.sym;
-                if (k == SDLK_UP) dy = -1; else if (k == SDLK_DOWN) dy = 1; else if (k == SDLK_LEFT) dx = -1; else if (k == SDLK_RIGHT) dx = 1;
-                else if (k == SDLK_PAGEUP) dy = -10; else if (k == SDLK_PAGEDOWN) dy = 10;
-                else if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) act = 1; else if (k == SDLK_ESCAPE || k == SDLK_BACKSPACE || k == SDLK_AC_BACK) cancel = 1;
-            } else if (e.type == SDL_CONTROLLERBUTTONDOWN) {
-                switch (e.cbutton.button) {
-                case SDL_CONTROLLER_BUTTON_DPAD_UP: dy = -1; break; case SDL_CONTROLLER_BUTTON_DPAD_DOWN: dy = 1; break;
-                case SDL_CONTROLLER_BUTTON_DPAD_LEFT: dx = -1; break; case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: dx = 1; break;
-                case SDL_CONTROLLER_BUTTON_A: act = 1; break; case SDL_CONTROLLER_BUTTON_B: cancel = 1; break;
-                case SDL_CONTROLLER_BUTTON_START: if (screen == S_HOME || !launcher) { cfg_save(); result = 1; } break;
-                }
-            } else if (e.type == SDL_CONTROLLERDEVICEADDED && !pad) pad = SDL_GameControllerOpen(e.cdevice.which);
-            else if (e.type == SDL_MOUSEMOTION) { mx = (float)e.motion.x; my = (float)e.motion.y;
-                if ((e.motion.state & SDL_BUTTON_LMASK) && mx > 380) { drag_x += (float)e.motion.xrel; drag_y += (float)e.motion.yrel; } }
-            else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { mx = (float)e.button.x; my = (float)e.button.y; click = 1; }
-            else if (e.type == SDL_MOUSEWHEEL) { dy = e.wheel.y > 0 ? -3 : 3; wheel = dy; }
-        }
-        code_gate(&result, &play_pending, w);
-        if (result >= 0) break;
-        if (keys && *keys) {                                   /* scripted keys (test hook): one per frame */
-            const char *c = strchr(keys, ','); size_t l = c ? (size_t)(c - keys) : strlen(keys);
-            if (!strncmp(keys, "up", l)) dy = -1; else if (!strncmp(keys, "down", l)) dy = 1;
-            else if (!strncmp(keys, "left", l)) dx = -1; else if (!strncmp(keys, "right", l)) dx = 1;
-            else if (!strncmp(keys, "enter", l)) act = 1; else if (!strncmp(keys, "esc", l)) cancel = 1;
-            else if (l > 4 && !strncmp(keys, "key:", 4) && screen == S_KEYS && kwait >= 0) {   /* a key for the key screen */
-                char nm[32]; snprintf(nm, sizeof nm, "%.*s", (int)(l - 4), keys + 4);
-                SDL_Scancode sc = SDL_GetScancodeFromName(nm);
-                if (!key_reserved(sc)) { for (int i = 0; i < NKEYS; i++) if (i != kwait && keymap[i] == sc) keymap[i] = keymap[kwait]; keymap[kwait] = sc; }
-                kwait = -1;
-            }
-            keys = c ? c + 1 : keys + l;
-        }
-
-        /* ---- background ---- */
-        SDL_SetRenderDrawColor(ui_r, 12, 10, 12, 255); SDL_RenderClear(ui_r);
-        if (bg) {   /* the title art's 4:3 picture area, darkened */
-            SDL_Rect src = { 0, 0, bw * 320 / 512 - 4, bh * 240 / 256 - 4 };   /* stay inside the picture: the texture holds other data below it */
-            SDL_SetTextureColorMod(bg, 255, 255, 255); SDL_SetTextureAlphaMod(bg, 255);
-            SDL_RenderCopy(ui_r, bg, &src, NULL);
-            ui_fill(0, 0, UI_W, UI_H, 0x0A080A, screen == S_HOME ? 120 : 215);
-        } else {    /* no title art (release builds): a dark red glow behind the menu */
-            static SDL_Texture *glow;
-            if (!glow) {   /* 64 x 64 radial glow, stretched over the window */
-                static uint32_t px[64 * 64];
-                for (int yy = 0; yy < 64; yy++) for (int xx = 0; xx < 64; xx++) {
-                    float dx = (xx - 31.5f) / 40.f, dy = (yy - 20.f) / 44.f, t = 1 - sqrtf(dx * dx + dy * dy); if (t < 0) t = 0;
-                    px[yy * 64 + xx] = (uint32_t)(t * t * 255) << 24 | 0x3A0F0C;
-                }
-                glow = SDL_CreateTexture(ui_r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, 64, 64);
-                if (glow) { SDL_UpdateTexture(glow, NULL, px, 64 * 4); SDL_SetTextureBlendMode(glow, SDL_BLENDMODE_BLEND); SDL_SetTextureScaleMode(glow, SDL_ScaleModeLinear); }
-            }
-            if (glow) SDL_RenderCopy(ui_r, glow, NULL, NULL);
-            if (screen == S_HOME) {
-                ui_text(3, 484, 236, 1, 0x000000, 160, "EVIL DEAD");
-                ui_text(3, 480, 230, 1, 0xB3261E, 255, "EVIL DEAD");
-                ui_text(2, 480, 292, 1, 0xD8D2C8, 255, "Hail to the King");
-            }
-        }
-
-        if (screen == S_HOME) {
-            static const char *items[4] = { "Play", "Options", "Extras", "Quit" };
-            for (int i = 0; i < 4; i++) if (mx >= 0 && my >= 392 + i * 48 - 34 && my < 392 + i * 48 + 10 && mx > 340 && mx < 620) { home_sel = i; if (click) act = 1; }
-            if (dy) home_sel = (home_sel + (dy > 0 ? 1 : 3)) % 4;
-            if (cancel) result = 0;
-            if (act) { if (home_sel == 0) { cfg_save(); result = 1; } else if (home_sel == 1) { screen = S_OPTIONS; sel = 0; btn = B_SAVE; }
-                       else if (home_sel == 2) { screen = S_EXTRAS; extras_sel = 0; } else result = 0; act = 0; }
-            for (int i = 0; i < 4 && screen == S_HOME; i++) {
-                float y = 392 + i * 48; int on = home_sel == i;
-                if (on) { ui_fill(340, y - 34, 280, 44, 0x8E1F1A, 210); ui_frame(340, y - 34, 280, 44, 0xE0453B, 255); }
-                ui_text(2, 480, y, 1, on ? 0xFFFFFF : 0xD8D2C8, 255, items[i]);
-            }
-            ui_text(0, 480, 700, 1, 0x8A847C, 255, "Unofficial recompilation (c) 2026 Killers' Heaven");
-        } else if (screen == S_OPTIONS) {
-            /* mouse: hover selects; a click on a row's value steps it (left half back, right half forward) */
-            if (mx >= 0) {
-                for (int r = 0; r < NROWS; r++) if (my >= ROW_Y0 + r * ROW_H - 23 && my < ROW_Y0 + r * ROW_H + 8 && mx >= 40 && mx < 920) {
-                    sel = r; if (click) { if (r == R_KEYS) { screen = S_KEYS; ksel = 0; kwait = -1; click = 0; } else row_change(r, mx < 680 ? -1 : 1); } }
-                for (int b = btn_first; b < NBTN; b++) if (my >= BTN_Y - 34 && my < BTN_Y + 14 && mx >= btn_x[b] && mx < btn_x[b] + btn_w[b]) {
-                    sel = NROWS; btn = b; if (click) act = 1; }
-            }
-            if (dy) { sel += dy > 0 ? 1 : -1; if (sel < 0) sel = NROWS; if (sel > NROWS) sel = 0; }
-            if (dx) { if (sel < NROWS) { if (sel != R_KEYS) row_change(sel, dx); } else { btn += dx; if (btn < btn_first) btn = NBTN - 1; if (btn >= NBTN) btn = btn_first; } }
-            if (act && sel == R_KEYS) { screen = S_KEYS; ksel = 0; kwait = -1; act = 0; }
-            if (act) {
-                if (sel < NROWS) row_change(sel, 1);
-                else if (btn == B_PLAY) { cfg_save(); result = 1; }
-                else if (btn == B_SAVE) { cfg_save(); if (launcher) screen = S_HOME; else result = 0; }
-                else { if (launcher) { cfg_load(); screen = S_HOME; } else result = 0; }
-            }
-            if (cancel) { if (launcher) { cfg_load(); screen = S_HOME; } else result = 0; }
-            if (screen == S_OPTIONS) {
-                ui_text(2, 60, 64, 0, 0xE8E2D8, 255, "Evil Dead: Hail to the King");
-                ui_text(1, 60, 98, 0, 0xD0463C, 255, "Options");
-                for (int r = 0; r < NROWS; r++) {
-                    float y = ROW_Y0 + r * ROW_H;
-                    int on = sel == r;
-                    if (on) { ui_fill(40, y - 23, 880, 30, 0x8E1F1A, 150); ui_fill(40, y - 23, 4, 30, 0xE0453B, 255); }
-                    ui_text(1, 64, y, 0, on ? 0xFFFFFF : 0xC8C2B8, 255, row_label[r]);
-                    if (row_st(r).lvl) ui_text(0, 64 + ui_text_w(1, row_label[r]) + 12, y - 2, 0, status_rgb[row_st(r).lvl], 255, status_tag[row_st(r).lvl]);
-                    char v[96]; row_value(r, v, sizeof v);
-                    ui_text(1, 680, y, 1, on ? 0xFFFFFF : 0xE8E2D8, 255, v);
-                    ui_text(1, 440, y, 1, on ? 0xFFFFFF : 0x6A6460, 255, "<");
-                    ui_text(1, 920 - 16, y, 2, on ? 0xFFFFFF : 0x6A6460, 255, ">");
-                }
-                int hr = sel < NROWS ? sel : -1;
-                if (hr >= 0) { ui_text(0, 60, 576, 0, 0xA8A29A, 255, row_help[hr][0]); ui_text(0, 60, 597, 0, 0xA8A29A, 255, row_help[hr][1]);
-                               ui_text(0, 60, 620, 0, status_rgb[row_st(hr).lvl], 255, row_st(hr).text); }
-                else ui_text(0, 60, 586, 0, 0xA8A29A, 255, btn == B_PLAY ? "Save these settings and start the game." :
-                                                         btn == B_SAVE ? (launcher ? "Save these settings." : "Save these settings and close.") : "Leave without saving.");
-                for (int b = btn_first; b < NBTN; b++) {
-                    int on = sel == NROWS && btn == b;
-                    if (on) ui_fill(btn_x[b], BTN_Y - 34, btn_w[b], 48, 0x8E1F1A, 200);
-                    ui_frame(btn_x[b], BTN_Y - 34, btn_w[b], 48, on ? 0xE0453B : 0x6A6460, 255);
-                    ui_text(1, btn_x[b] + btn_w[b] / 2, BTN_Y, 1, 0xFFFFFF, 255, btn_label[b]);
-                }
-                if (icon_tex[cfg.prompts & 3]) { draw_pad(840, 612, cfg.prompts & 3); ui_text(0, 840, 690, 1, 0x8A847C, 255, prompt_label[cfg.prompts & 3]); }
-            }
-        } else if (screen == S_KEYS) {
-            enum { KROWS = NKEYS + 2 };      /* + reset, back */
-            if (kwait < 0) {
-                if (mx >= 0) for (int r = 0; r < KROWS; r++) if (my >= ROW_Y0 + r * ROW_H - 23 && my < ROW_Y0 + r * ROW_H + 8 && mx >= 40 && mx < 920) { ksel = r; if (click) act = 1; }
-                if (dy) { ksel += dy > 0 ? 1 : -1; if (ksel < 0) ksel = KROWS - 1; if (ksel >= KROWS) ksel = 0; }
-                if (act) {
-                    if (ksel < NKEYS) kwait = ksel;
-                    else if (ksel == NKEYS) memcpy(keymap, key_default, sizeof keymap);
-                    else { screen = S_OPTIONS; sel = R_KEYS; }
-                }
-                if (cancel) { screen = S_OPTIONS; sel = R_KEYS; }
-            }
-            if (screen == S_KEYS) {
-                ui_text(2, 60, 64, 0, 0xE8E2D8, 255, "Evil Dead: Hail to the King");
-                ui_text(1, 60, 98, 0, 0xD0463C, 255, "Keyboard controls");
-                for (int r = 0; r < KROWS; r++) {
-                    float y = ROW_Y0 + r * ROW_H + (r >= NKEYS ? 12 : 0); int on = ksel == r;
-                    if (on) { ui_fill(40, y - 23, 880, 30, kwait == r ? 0xB3261E : 0x8E1F1A, 150); ui_fill(40, y - 23, 4, 30, 0xE0453B, 255); }
-                    if (r < NKEYS) {
-                        ui_text(1, 64, y, 0, on ? 0xFFFFFF : 0xC8C2B8, 255, key_label[r]);
-                        ui_text(1, 680, y, 1, on ? 0xFFFFFF : 0xE8E2D8, 255, kwait == r ? "press a key..." : SDL_GetScancodeName(keymap[r]));
-                    } else ui_text(1, 64, y, 0, on ? 0xFFFFFF : 0xC8C2B8, 255, r == NKEYS ? "Reset to defaults" : "Back");
-                }
-                ui_text(0, 60, 586, 0, 0xA8A29A, 255, kwait >= 0 ? "Press the new key. Esc keeps the old one." :
-                        "Enter: change the key. A key already in use swaps with this one.");
-                ui_text(0, 60, 608, 0, 0xA8A29A, 255, "Esc and F8-F12 are kept for the hotkeys. Save on the Options page to keep changes.");
-            }
-        } else if (screen == S_EXTRAS) {
-            char d0[64], d1[64], d2[64]; snprintf(d0, sizeof d0, "Documents (%d)", ndocs); snprintf(d1, sizeof d1, "Cutscenes (%d)", nmovies); snprintf(d2, sizeof d2, "Models (%d)", nments);
-            const char *items[5] = { d0, d1, d2, "About this port", "Back" };
-            for (int i = 0; i < 5; i++) if (mx >= 0 && my >= 250 + i * 56 - 36 && my < 250 + i * 56 + 14 && mx > 60 && mx < 600) { extras_sel = i; if (click) act = 1; }
-            if (dy) extras_sel = (extras_sel + (dy > 0 ? 1 : 4)) % 5;
-            if (cancel || (act && extras_sel == 4)) { screen = S_HOME; act = 0; }
-            if (act && extras_sel == 0 && ndocs) { screen = S_DOCS; doc_sel = 0; doc_top = 0; }
-            if (act && extras_sel == 1 && nmovies) { screen = S_MOVIES; doc_sel = 0; doc_top = 0; act = 0; }
-            if (act && extras_sel == 2 && nments) { screen = S_MODELS; doc_sel = 0; doc_top = 0; act = 0; model_select(0); }
-            if (act && extras_sel == 3) { screen = S_ABOUT; read_top = 0; nlines = wrap(1, about_text, 820, lines, 400); }
-            if (screen == S_EXTRAS) {
-                ui_text(2, 60, 64, 0, 0xE8E2D8, 255, "Evil Dead: Hail to the King");
-                ui_text(1, 60, 98, 0, 0xD0463C, 255, "Extras");
-                for (int i = 0; i < 5; i++) {
-                    float y = 250 + i * 56; int on = extras_sel == i;
-                    if (on) { ui_fill(40, y - 36, 560, 48, 0x8E1F1A, 170); ui_fill(40, y - 36, 4, 48, 0xE0453B, 255); }
-                    ui_text(2, 64, y, 0, on ? 0xFFFFFF : 0xD8D2C8, 255, items[i]);
-                    if (ex_status[i].lvl) ui_text(0, 64 + ui_text_w(2, items[i]) + 14, y - 4, 0, status_rgb[ex_status[i].lvl], 255, status_tag[ex_status[i].lvl]);
-                }
-                ui_text(0, 60, 620, 0, status_rgb[ex_status[extras_sel].lvl], 255, ex_status[extras_sel].text);
-                ui_text(0, 60, 576, 0, 0xA8A29A, 255, extras_sel == 0 ? "Every note, journal and page Ash can find, read from your disc." :
-                                                     extras_sel == 1 ? "Watch the game's movies, played from your disc." :
-                                                     extras_sel == 2 ? "Turn and inspect the game's characters, read from your disc." :
-                                                     extras_sel == 3 ? "What this is, and credits." : "Back to the main screen.");
-            }
-        } else if (screen == S_DOCS) {
-            enum { VIS = 14 };
-            for (int i = 0; i < VIS && doc_top + i < ndocs; i++) if (mx >= 0 && my >= 150 + i * 36 - 26 && my < 150 + i * 36 + 10 && mx > 40 && mx < 920) { doc_sel = doc_top + i; if (click) act = 1; }
-            if (dy) { doc_sel += dy > 0 ? (dy > 1 ? dy : 1) : (dy < -1 ? dy : -1); if (doc_sel < 0) doc_sel = 0; if (doc_sel >= ndocs) doc_sel = ndocs - 1; }
-            if (doc_sel < doc_top) doc_top = doc_sel; if (doc_sel >= doc_top + VIS) doc_top = doc_sel - VIS + 1;
-            if (cancel) { screen = S_EXTRAS; act = 0; }
-            if (act) { screen = S_READ; read_top = 0; nlines = wrap(1, docs[doc_sel].body, 820, lines, 400); }
-            if (screen == S_DOCS) {
-                ui_text(2, 60, 64, 0, 0xE8E2D8, 255, "Documents");
-                ui_text(1, 60, 98, 0, 0xD0463C, 255, "Found on your disc");
-                for (int i = 0; i < VIS && doc_top + i < ndocs; i++) {
-                    float y = 150 + i * 36; int on = doc_sel == doc_top + i;
-                    if (on) { ui_fill(40, y - 26, 880, 34, 0x8E1F1A, 170); ui_fill(40, y - 26, 4, 34, 0xE0453B, 255); }
-                    ui_text(1, 64, y, 0, on ? 0xFFFFFF : 0xD8D2C8, 255, docs[doc_top + i].title);
-                }
-                ui_text(0, 60, 690, 0, 0x8A847C, 255, "Enter / A: read     Esc / B: back");
-            }
-        } else if (screen == S_MOVIES) {
-            enum { VIS = 14, COLS = 3 };
-            int rows = (nmovies + COLS - 1) / COLS;
-            for (int i = 0; i < VIS && doc_top + i < rows; i++) for (int c = 0; c < COLS; c++) {
-                int k = (doc_top + i) * COLS + c; if (k >= nmovies) break;
-                if (mx >= 0 && my >= 150 + i * 36 - 26 && my < 150 + i * 36 + 10 && mx > 40 + c * 293 && mx < 40 + (c + 1) * 293) { doc_sel = k; if (click) act = 1; }
-            }
-            if (dy) { doc_sel += (dy > 0 ? 1 : -1) * (abs(dy) > 1 ? VIS * COLS : COLS); }
-            if (dx) doc_sel += dx;
-            if (doc_sel < 0) doc_sel = 0; if (doc_sel >= nmovies) doc_sel = nmovies - 1;
-            if (doc_sel / COLS < doc_top) doc_top = doc_sel / COLS; if (doc_sel / COLS >= doc_top + VIS) doc_top = doc_sel / COLS - VIS + 1;
-            if (cancel) { screen = S_EXTRAS; act = 0; }
-            if (act) { play_movie(movies[doc_sel].name); act = 0; mx = my = -1; }
-            if (screen == S_MOVIES) {
-                ui_text(2, 60, 64, 0, 0xE8E2D8, 255, "Cutscenes");
-                ui_text(1, 60, 98, 0, 0xD0463C, 255, "Played from your disc");
-                for (int i = 0; i < VIS && doc_top + i < rows; i++) for (int c = 0; c < COLS; c++) {
-                    int k = (doc_top + i) * COLS + c; if (k >= nmovies) break;
-                    float y = 150 + i * 36, x = 40 + c * 293; int on = doc_sel == k;
-                    if (on) { ui_fill(x, y - 26, 280, 34, 0x8E1F1A, 170); ui_fill(x, y - 26, 4, 34, 0xE0453B, 255); }
-                    char lbl[48]; char nm[16]; snprintf(nm, sizeof nm, "%s", movies[k].name); char *dot = strchr(nm, '.'); if (dot) *dot = 0;
-                    snprintf(lbl, sizeof lbl, "%s  %.1f MB", nm, movies[k].size / 1048576.0);
-                    ui_text(1, x + 20, y, 0, on ? 0xFFFFFF : 0xD8D2C8, 255, lbl);
-                }
-                ui_text(0, 60, 690, 0, 0x8A847C, 255, "Enter / A: play     Esc / B: back (also stops a movie)");
-            }
-        } else if (screen == S_MODELS) {
-            enum { VIS = 15 };
-            for (int i = 0; i < VIS && doc_top + i < nments; i++) if (mx >= 0 && my >= 150 + i * 34 - 25 && my < 150 + i * 34 + 9 && mx > 40 && mx < 360) { doc_sel = doc_top + i; }
-            if (dy && !wheel) { doc_sel += dy > 0 ? 1 : -1; }
-            if (wheel && mx > 380) { m_zoom *= wheel < 0 ? 1.12f : 1 / 1.12f; }
-            else if (wheel) { doc_sel += wheel > 0 ? 3 : -3; }
-            if (doc_sel < 0) doc_sel = 0; if (doc_sel >= nments) doc_sel = nments - 1;
-            if (doc_sel < doc_top) doc_top = doc_sel; if (doc_sel >= doc_top + VIS) doc_top = doc_sel - VIS + 1;
-            model_select(doc_sel);
-            { const Uint8 *ks = SDL_GetKeyboardState(NULL); float spin = 0, tilt = 0, zm = 0;
-              if (ks[SDL_SCANCODE_LEFT] || ks[SDL_SCANCODE_A]) spin -= 1; if (ks[SDL_SCANCODE_RIGHT] || ks[SDL_SCANCODE_D]) spin += 1;
-              if (ks[SDL_SCANCODE_W]) tilt += 1; if (ks[SDL_SCANCODE_S]) tilt -= 1;
-              if (ks[SDL_SCANCODE_EQUALS] || ks[SDL_SCANCODE_KP_PLUS] || ks[SDL_SCANCODE_PAGEUP]) zm += 1;
-              if (ks[SDL_SCANCODE_MINUS] || ks[SDL_SCANCODE_KP_MINUS] || ks[SDL_SCANCODE_PAGEDOWN]) zm -= 1;
-              if (pad) {
-                  float rx = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.f, ry = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.f;
-                  float lx2 = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX) / 32767.f;
-                  if (fabsf(rx) > 0.2f) spin += rx; else if (fabsf(lx2) > 0.3f) spin += lx2;
-                  if (fabsf(ry) > 0.2f) tilt -= ry;
-                  zm += SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) / 32767.f - SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) / 32767.f;
-              }
-              static Uint32 idle_since; Uint32 now = SDL_GetTicks();
-              if (spin || tilt || zm || drag_x || drag_y) idle_since = now;
-              m_yaw += spin * 0.035f + drag_x * 0.01f; m_pitch += tilt * 0.025f + drag_y * 0.01f;
-              if (m_pitch > 1.4f) m_pitch = 1.4f; if (m_pitch < -1.4f) m_pitch = -1.4f;
-              m_zoom *= 1 + zm * 0.02f; if (m_zoom < 0.3f) m_zoom = 0.3f; if (m_zoom > 6) m_zoom = 6;
-              if (now - idle_since > 2500) m_yaw += 0.006f;                 /* turn slowly when left alone */
-            }
-            if (act) { m_props = !m_props; act = 0; }
-            if (cancel) { screen = S_EXTRAS; act = 0; }
-            if (screen == S_MODELS) {
-                ui_text(2, 60, 64, 0, 0xE8E2D8, 255, "Models");
-                ui_text(1, 60, 98, 0, 0xD0463C, 255, "Read from your disc");
-                for (int i = 0; i < VIS && doc_top + i < nments; i++) {
-                    float y = 150 + i * 34; int on = doc_sel == doc_top + i;
-                    if (on) { ui_fill(40, y - 25, 330, 32, 0x8E1F1A, 170); ui_fill(40, y - 25, 4, 32, 0xE0453B, 255); }
-                    char lbl[48]; ment_label(doc_top + i, lbl, sizeof lbl);
-                    ui_text(0, 60, y - 2, 0, on ? 0xFFFFFF : 0xD8D2C8, 255, lbl);
-                }
-                ui_fill(390, 120, 540, 540, 0x0A080A, 235);
-                if (mcur) model_draw(390, 120, 540, 540);
-                else ui_text(1, 660, 400, 1, 0x8A847C, 255, "Couldn't read this one");
-                if (mcur) {
-                    char info[96]; int tris = 0; for (int i = 0; i < mcur->nparts; i++) if (i == mcur->body || m_props || mcur->parts[i].primary) tris += mcur->parts[i].nt;
-                    snprintf(info, sizeof info, "%s  -  %d triangles%s", ments[doc_sel].file, tris, mcur->nparts > 1 ? (m_props ? "  -  all parts" : "") : "");
-                    ui_text(0, 920, 650, 2, 0x8A847C, 255, info);
-                }
-                ui_text(0, 60, 690, 0, 0x8A847C, 255, "Left/Right, drag: turn   +/-, wheel: zoom   Enter: all parts   Esc: back");
-            }
-        } else if (screen == S_READ || screen == S_ABOUT) {
-            enum { VIS = 17 };
-            if (dy) { read_top += dy; if (read_top > nlines - VIS) read_top = nlines - VIS; if (read_top < 0) read_top = 0; }
-            if (cancel || act) { screen = screen == S_READ ? S_DOCS : S_EXTRAS; act = 0; }
-            else {
-                ui_text(2, 60, 64, 0, 0xE8E2D8, 255, screen == S_READ ? docs[doc_sel].title : "About this port");
-                ui_fill(60, 84, 840, 2, 0x8E1F1A, 255);
-                for (int i = 0; i < VIS && read_top + i < nlines; i++) ui_text(1, 70, 130 + i * 31, 0, 0xE8E2D8, 255, lines[read_top + i]);
-                if (nlines > VIS) ui_text(0, 900, 690, 2, 0x8A847C, 255, "Up / Down to scroll");
-                ui_text(0, 60, 690, 0, 0x8A847C, 255, "Esc / B: back");
-            }
-        }
-        code_gate(&result, &play_pending, w);
-        code_status(screen == S_HOME || play_pending);
-        static int shot_wait = 2;
-        if (shot && (!keys || !*keys) && --shot_wait <= 0) {     /* test hook: screenshot (a frame after the last key), then close */
-            uint8_t *px = malloc((size_t)ow * oh * 4);
-            SDL_RenderReadPixels(ui_r, NULL, SDL_PIXELFORMAT_ABGR8888, px, ow * 4);
-            png_write(shot, px, ow, oh, 0); free(px);
-            fprintf(stderr, "[options] saved %s (%dx%d)\n", shot, ow, oh);
-            result = 0;
-        }
-        SDL_RenderPresent(ui_r);
-        if (!shot) SDL_Delay(8);
-    }
-    if (pad) SDL_GameControllerClose(pad);
-    for (int i = 0; i < 4; i++) if (icon_tex[i]) { SDL_DestroyTexture(icon_tex[i]); icon_tex[i] = NULL; }
-    if (bg) SDL_DestroyTexture(bg);
-    SDL_DestroyTexture(uf.tex); SDL_DestroyRenderer(ui_r); SDL_DestroyWindow(w);
-    ui_r = NULL;
-    return result;
+    load_icons(r, ui_base);
+    snprintf(p, sizeof p, "%stextures/3BA3ED33C3D7FC12_512x256.png", ui_base);
+    SDL_Texture *bg = ui_load_png(r, p, &bw, &bh);
+    /* the 4:3 picture area only: the texture holds other data below it */
+    src->x = 0; src->y = 0; src->w = bw * 320 / 512 - 4; src->h = bh * 240 / 256 - 4;
+    return bg;
 }
-static int options_window(void) { return options_window_ex(0); }
+static int ui_save(void) { return cfg_save(); }
+static void ui_defaults(void) { cfg_defaults(); }
+static void ui_value(int id, char *out, size_t n) { row_value(id, out, n); }
+
+/* launcher = 1: the home screen (launcher.bat); 0: straight to Options (options.bat).
+ * Returns 1 = play, 0 = quit. */
+static int options_window_ex(int launcher) {
+    static int scanned;
+    khl_game g = {
+        "Evil Dead: Hail to the King", "EVIL DEAD", "Hail to the King",
+        "Unofficial recompilation (c) 2026 Killers' Heaven", about_text,
+        (int)(sizeof pages / sizeof *pages), pages, 1, binds,
+        (int)(sizeof extras / sizeof *extras), extras,
+        ui_value, row_change, NULL, row_status,
+        cfg_load, ui_save, ui_defaults, ui_play, ui_background,
+        launcher ? KHL_SCREEN_HOME : KHL_SCREEN_OPTIONS, ui_overlay,
+    };
+    { char *b = SDL_GetBasePath(); if (b) { snprintf(ui_base, sizeof ui_base, "%s", b); SDL_free(b); } }
+    if (!scanned) {      /* the Extras: what's on the player's disc */
+        scanned = 1;
+        load_docs();
+        nmovies = 0; iso_list_cb(movie_cb, NULL);
+        if (getenv("DC_MOVIE_DIR")) { movie_cb("AX00.SFD", 4u << 20, NULL); movie_cb("AX01A.SFD", 40u << 20, NULL); }
+        nments = models_scan(ments, 96); qsort(ments, (size_t)nments, sizeof *ments, ment_cmp);
+    }
+    int r = khl_run(&g);
+    /* the launcher's renderer is gone, and its textures with it */
+    for (int i = 0; i < 4; i++) icon_tex[i] = NULL;
+    model_free(mcur); mcur = NULL; mcur_i = -1; mtex = NULL;
+    return r;
+}

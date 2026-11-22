@@ -19,7 +19,7 @@ turning your copy of the game into a PC program, happens on your machine.
 | `build.bat`, `build.ps1` | The one-click Windows build (`build.ps1` does the work, `build.bat` starts it) |
 | `build.sh` | The same for Linux |
 | `games/hail-to-the-king/tools/` | The recompiler (`recomp.py` and friends) and the disc reader |
-| `games/hail-to-the-king/runtime/` | The stand-in Dreamcast: graphics, sound, controller, memory card, disc drive, BIOS, plus the launcher and options window |
+| `games/hail-to-the-king/runtime/` | The stand-in Dreamcast: graphics, sound, controller, memory card, disc drive, BIOS, plus the game's half of the launcher (`options_ui.c`); the screens are the shared `kh-launcher/` module at the top of the repo |
 | `games/hail-to-the-king/notes/` | Names and hints for the recompiler (no game code) |
 | `games/hail-to-the-king/textures/` | The redrawn HD legal screen and the button-prompt icons (made by this project, no game art) |
 | `games/hail-to-the-king/dist/README.txt` | The player's guide that ends up next to the game |
@@ -46,7 +46,7 @@ turning your copy of the game into a PC program, happens on your machine.
 |---|---|
 | `launcher.bat` | Start here: Play, Options, Extras |
 | `play.bat` | Straight into the game |
-| `options.bat` | Settings window only |
+| `options.bat` | The launcher, opened straight on Options |
 | `hail-to-the-king.exe`, `SDL2.dll` | The game |
 | `textures/` | HD legal screen and button-prompt icons |
 | `README.txt`, `LICENSE.txt` | Player's guide and licence |

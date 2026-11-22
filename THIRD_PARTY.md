@@ -3,8 +3,8 @@
 | Component | Where | License |
 |---|---|---|
 | pl_mpeg (Dominic Szablewski) | `games/hail-to-the-king/runtime/third_party/pl_mpeg.h` | MIT |
-| stb_image, stb_truetype (Sean Barrett) | `games/hail-to-the-king/runtime/third_party/` | MIT / public domain |
-| Courier Prime (Alan Dague-Greene) | embedded in `runtime/third_party/courierprime_ttf.h`, `tools/fontpack/` | SIL Open Font License 1.1 (`tools/fontpack/OFL.txt`) |
+| stb_image, stb_truetype (Sean Barrett) | `games/hail-to-the-king/runtime/third_party/`, `kh-launcher/third_party/` | MIT / public domain |
+| Courier Prime (Alan Dague-Greene) | embedded in `runtime/third_party/courierprime_ttf.h` and `kh-launcher/third_party/courierprime_ttf.h`, `tools/fontpack/` | SIL Open Font License 1.1 (`tools/fontpack/OFL.txt`) |
 | EB Garamond (Georg Duffner, Octavio Pardo) | `tools/fontpack/EBGaramond.ttf` | SIL Open Font License 1.1 (`tools/fontpack/EBGaramond-OFL.txt`) |
 | DejaVu Sans Bold (letters in the button-prompt icons, `tools/fontpack/prompticons.py`) | rendered into `textures/prompts/*/icons.png` | Bitstream Vera / DejaVu font license |
 | DejaVu Sans, DejaVu Sans Bold (text on the Killers' Heaven splash, `tools/make_splash.py`) | rendered into `runtime/splash_png.h` | Bitstream Vera / DejaVu font license |

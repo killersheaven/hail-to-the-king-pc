@@ -1,10 +1,10 @@
-Evil Dead: Hail to the King - unofficial recompilation, v0.15.0
+Evil Dead: Hail to the King - unofficial recompilation, v0.16.0
 (c) 2026 Killers' Heaven - free software under the GNU GPL v3 (LICENSE.txt)
 
 This folder was built on your computer from your own disc. Start:
   launcher.bat   Play, Options and Extras (documents, cutscenes, models)
   play.bat       straight into the game
-  options.bat    the settings window
+  options.bat    the launcher, opened straight on Options
 The disc image you built from must stay where it is: the game reads it while
 it runs (the paths are in the .bat files; rebuild if you move it).
 
@@ -20,8 +20,10 @@ LEGAL SCREEN
   credit line for this port (textures folder; turn off with HD art = off).
 
 OPTIONS (options.bat, or settings.ini)
-  Hover over an option to see what it does and whether it works yet;
-  unfinished ones are tagged PARTIAL or NOT YET.
+  Three pages: Display, Controls and Cheats (Tab, or LB / RB on a controller,
+  switches page). Hover over an option to see what it does and whether it
+  works yet; unfinished ones are tagged PARTIAL or NOT YET. Defaults puts
+  everything back (press Save to keep it).
   Works: display mode and monitor, window size, render resolution, 4:3 or
   stretch, texture filtering (smooth / sharp), menu sharpening, button
   prompts (Dreamcast, Xbox, PlayStation, Switch), keyboard controls, testing
