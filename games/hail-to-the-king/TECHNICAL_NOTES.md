@@ -44,8 +44,20 @@ Debug aids: `DC_TRAP_ROM=1` (SIGTRAP on BIOS-ROM reads, run under gdb), `DC_DUMP
   (end-of-list bit on the third entry), and it never sends anything to port D. So of the eight
   save slots its Load/Save screens list (two memory-card slots per port), only six can ever be
   present; "Save Slot 7/8" (port D) are always greyed.
-- The runtime answers ports B and C as idle standard controllers with two memory cards each;
-  only port A carries the player's input.
+- By default only port A answers (two cards: Slots 1-2, eight 23-block saves each). With
+  `save_slots = 6` (or `DC_SAVE_SLOTS=6`) the runtime also answers ports B and C as idle
+  standard controllers with two memory cards each; only port A carries the player's input.
+- **Load/Save screens are two levels.** The first lists the eight card slots ("Save Slot 1-8"
+  after the text patch; originally "Controller A, Slot 1" ...). Picking one opens a second list
+  of up to eight save entries on that card, empty ones shown as "Empty". A card has 200 user
+  blocks and a save is 23 blocks, so eight saves fit.
+- **Save file:** `EVILDEAD.000`, a data file (directory type 0x33). Its VMS header description
+  is the room name plus play time, e.g. `ED: HELLBILLY HOUSE 00:43:48`; the short description
+  is `EVIL DEAD`. While building the list the game reads only each save's header block; it reads
+  the rest when you load.
+- **Imported saves:** saves in VMI/VMS form (the Planetweb browser's download format, used by
+  emulators and save-sharing sites) go onto a card with `tools/vmu_import.py`. A Hellbilly
+  House save imported this way loads into the level.
 
 ## 9. Sound effect DSP
 

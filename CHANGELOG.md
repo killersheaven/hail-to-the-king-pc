@@ -6,11 +6,15 @@ are closed, which will be 1.0.0. The test builds before the first public release
 
 ## Unreleased
 
-- Save slots 3–6 work: the runtime now emulates controllers on ports B and C, each with two
-  memory cards (`vmu_b1.bin` … `vmu_c2.bin`). A card's file is made on its first save instead
+- Saving: Save Slots 1 and 2 are the two memory cards (`vmu_a1.bin`, `vmu_a2.bin`), and each
+  holds up to eight saves, so sixteen in all. A card's file is made on its first save instead
   of at start-up.
-- Slots 7–8 stay greyed out on purpose: the game's own controller polling stops at port C,
-  so it never sees cards on port D.
+- `save_slots = 6` in `settings.ini` adds Slots 3–6 (cards on emulated controllers B and C,
+  `vmu_b1.bin` … `vmu_c2.bin`). Slots 7–8 can't work: the game never checks controller D.
+- Moving or copying the game folder no longer breaks it: `build.bat` starts the compile over
+  when the folder was built somewhere else, and the `.bat` files find the disc relative to
+  their own folder.
+- `tools/vmu_import.py` copies a Dreamcast save in VMI/VMS form onto a memory card file.
 - Sound: the AICA effect DSP (the chip's reverb/echo processor) is emulated. The game loads an
   84-step effect program, but in the areas tested so far it sends no sound to it, so there's no
   audible change yet; `log.txt` notes the first time it does.

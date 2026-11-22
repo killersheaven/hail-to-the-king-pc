@@ -30,11 +30,11 @@ OPTIONS (options.bat, or settings.ini)
   while the game runs, and the HD legal screen).
 
 SAVING
-  The memory cards are emulated. Save Slots 1-6 work and are files in this
-  folder: Slots 1-2 = vmu_a1.bin, vmu_a2.bin; 3-4 = vmu_b1.bin, vmu_b2.bin;
-  5-6 = vmu_c1.bin, vmu_c2.bin (each file appears on its first save).
-  Slots 7-8 stay greyed out: the game itself never checks the fourth
-  controller port, where those cards would be. Pick up the Save Tape from the tape recorder in
+  The memory cards are emulated. Save Slot 1 and Save Slot 2 are files in
+  this folder, vmu_a1.bin and vmu_a2.bin (each appears on its first save),
+  and each holds up to eight saves. Want more? Set save_slots = 6 in
+  settings.ini for Slots 3-6 (vmu_b1.bin ... vmu_c2.bin). Slots 7-8 stay
+  greyed out: the game itself never checks the fourth controller port. Pick up the Save Tape from the tape recorder in
   the cabin, then use it at a save box.
 
 EXTRAS (launcher.bat)

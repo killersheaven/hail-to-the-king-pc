@@ -1,13 +1,13 @@
 /* Maple bus: answers the game's controller command lists.
  *
- * A standard controller on each of ports A-D, each with two memory cards
- * (VMUs, sub-units 1 and 2): the game's eight save slots. Only port A's
- * controller is played with; B-D report an idle pad so their cards count.
+ * A standard controller on port A with two memory cards (VMUs, sub-units 1
+ * and 2): Save Slots 1-2, each card holding several saves. With
+ * maple_save_slots = 6 (save_slots in settings.ini, or DC_SAVE_SLOTS=6), ports
+ * B and C also answer, as idle pads with two cards each: Slots 3-6.
  * Each card is a 128 KB file - vmu_a1.bin, vmu_a2.bin (Save Slots 1-2),
  * vmu_b1.bin ... vmu_d2.bin (Slots 3-8); DC_VMU=path overrides the first -
  * formatted in memory when missing, written to disk on the first save and
  * through on every block write after. Screen and clock writes are accepted.
- * DC_ONEPAD=1: only port A (the old layout, slots 1-2).
  * Frame layout from public documentation (KallistiOS maple.h, dreamcast.wiki).
  *
  * Input comes from maple_pad (set by the platform layer) or, for headless
@@ -20,6 +20,7 @@
 #include <string.h>
 
 maple_pad_t maple_pad = { 0, 0, 0, 0x80, 0x80 };
+int maple_save_slots = 2;                       /* 2: port A only; 6: ports A-C */
 uint64_t dc_frame_count(void);
 
 enum { CMD_DEVINFO = 1, CMD_ALLINFO = 2, CMD_RESET = 3, CMD_KILL = 4, CMD_GETCOND = 9,
@@ -215,11 +216,13 @@ void maple_dma(uint32_t list) {
           if (dbg && k == nseen && nseen < 64) { seen[nseen++] = key; fprintf(stderr, "[maple] port %d to %02X cmd %d len %d (frame %llu)\n", port, to, cmd, len, (unsigned long long)dc_frame_count()); } }
         uint32_t out = recv;
         int unit = to & 0x3F;                                         /* 0x20 = main device, 0x01-0x10 = sub-units */
-        static int onepad = -1; if (onepad < 0) onepad = getenv("DC_ONEPAD") != NULL;
-        if ((port == 0 || !onepad) && (unit == 0x01 || unit == 0x02) && !getenv("DC_NOVMU")) {
+        static int nports;
+        if (!nports) { const char *e = getenv("DC_SAVE_SLOTS"); nports = (e ? atoi(e) : maple_save_slots) >= 3 ? 3 : 1; }
+        int absent = port >= nports;
+        if (!absent && (unit == 0x01 || unit == 0x02) && !getenv("DC_NOVMU")) {
             vc = port * 2 + (unit == 0x02);
             vmu_frame(out, cmd, from, (uint32_t)(port << 6) | (uint32_t)unit, p + 12, len);
-        } else if ((port != 0 && onepad) || unit != 0x20) {
+        } else if (absent || unit != 0x20) {
             W32(out, 0xFFFFFFFFu);                                    /* no device */
         } else {
             uint32_t me = (uint32_t)(port << 6) | 0x20 | (getenv("DC_NOVMU") ? 0 : 0x03);   /* bits 0, 1: memory cards in slots 1 and 2 */

@@ -19,6 +19,19 @@ New-Item -ItemType Directory -Force -Path $Tools | Out-Null
 
 function Step($n, $text) { Write-Host ""; Write-Host "== $n/5  $text" -ForegroundColor Cyan }
 
+# A CMake build folder remembers the full path it was made in. If this folder has been
+# moved or copied (say from Downloads to another drive), start that build folder over.
+function Reset-IfMoved($dir) {
+    $cache = Join-Path $dir 'CMakeCache.txt'
+    if (-not (Test-Path $cache)) { return }
+    $line = Select-String -Path $cache -Pattern '^CMAKE_CACHEFILE_DIR:INTERNAL=(.*)$' | Select-Object -First 1
+    $was = if ($line) { $line.Matches[0].Groups[1].Value } else { '' }
+    if (($was -replace '\\', '/') -ne ((Resolve-Path $dir).Path -replace '\\', '/')) {
+        Write-Host "This folder was moved; starting the compile over in $dir"
+        Remove-Item -Recurse -Force $dir
+    }
+}
+
 # ---------- 1. the disc ----------
 Step 1 'Finding your disc'
 if (-not $Cue) {
@@ -117,6 +130,7 @@ if ($Android) {
     $env:PATH = "$(Split-Path $ninja);$env:PATH"
     $adir = Join-Path $Game 'build\android'
     $fw = { param($p) $p -replace '\\', '/' }
+    Reset-IfMoved (Join-Path $adir 'native')
     & $cmake -S (Join-Path $Game 'android') -B (Join-Path $adir 'native') -G Ninja "-DCMAKE_MAKE_PROGRAM=$(& $fw $ninja)" `
         "-DCMAKE_TOOLCHAIN_FILE=$(& $fw (Join-Path $ndk 'build\cmake\android.toolchain.cmake'))" -DANDROID_ABI=arm64-v8a `
         -DANDROID_PLATFORM=android-24 -DCMAKE_BUILD_TYPE=Release "-DSDL_SRC=$(& $fw $dirs['sdl2-src'])"
@@ -177,6 +191,7 @@ if ($Android) {
 Step 5 'Compiling (10-20 minutes the first time)'
 $env:PATH = "$llvm\bin;$(Split-Path $ninja);$env:PATH"
 $bdir = Join-Path $Game 'build\win'
+Reset-IfMoved $bdir
 $cc = (Join-Path $llvm 'bin\x86_64-w64-mingw32-clang.exe') -replace '\\', '/'
 & $cmake -S $Game -B $bdir -G Ninja "-DCMAKE_MAKE_PROGRAM=$($ninja -replace '\\','/')" "-DCMAKE_C_COMPILER=$cc" `
     -DCMAKE_BUILD_TYPE=Release -DPLATFORM=sdl "-DEXT_INC=$(($sdl + '\include') -replace '\\','/')" `
@@ -193,8 +208,16 @@ New-Item -ItemType Directory -Force -Path (Join-Path $Out 'textures') | Out-Null
 Copy-Item (Join-Path $Game 'textures\*') (Join-Path $Out 'textures') -Recurse -Force
 Copy-Item (Join-Path $Root 'LICENSE') (Join-Path $Out 'LICENSE.txt') -Force
 $bats = @{ 'play.bat' = ''; 'options.bat' = ' --options'; 'launcher.bat' = ' --launcher' }
+# The disc path is written relative to pc-build when the disc sits in or next to this
+# folder, so the game keeps working if the whole folder is moved to another drive.
+$disc = $Cue
+foreach ($up in @(@($Root, '..\'), @((Split-Path $Root -Parent), '..\..\'))) {
+    if (-not $up[0]) { continue }
+    $base = $up[0].TrimEnd('\') + '\'
+    if ($Cue.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) { $disc = '%~dp0' + $up[1] + $Cue.Substring($base.Length); break }
+}
 foreach ($b in $bats.Keys) {
-    $body = "@echo off`r`ncd /d `"%~dp0`"`r`nhail-to-the-king.exe `"$Cue`"$($bats[$b]) 2> log.txt`r`n"
+    $body = "@echo off`r`ncd /d `"%~dp0`"`r`nhail-to-the-king.exe `"$disc`"$($bats[$b]) 2> log.txt`r`n"
     Set-Content -Path (Join-Path $Out $b) -Value $body -Encoding ASCII -NoNewline
 }
 Write-Host ""
