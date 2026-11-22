@@ -7,7 +7,15 @@ typedef signed char int8_t; typedef short int16_t; typedef int int32_t; typedef 
 typedef __SIZE_TYPE__ size_t; typedef __PTRDIFF_TYPE__ intptr_t;
 void *memcpy(void *d, const void *s, size_t n);
 double sin(double); double cos(double); double sqrt(double); float sqrtf(float);
+#endif
+/* Variables of the runtime that the generated code uses. On Windows, TinyCC links them
+ * like variables of a DLL, which must be declared dllimport. */
+#if defined(DC_JIT_GUEST) && defined(_WIN32)
+#define DC_RUNTIME_VAR __declspec(dllimport)
 #else
+#define DC_RUNTIME_VAR
+#endif
+#ifndef DC_JIT_GUEST
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
@@ -32,7 +40,7 @@ typedef struct sh4ctx {
 #define FPSCR_FR 0x00200000u
 
 /* ---------------- memory ---------------- */
-extern uint8_t *dc_ram;               /* 16 MB main RAM (0x0C000000) */
+extern DC_RUNTIME_VAR uint8_t *dc_ram;               /* 16 MB main RAM (0x0C000000) */
 uint8_t  mmio_read8(uint32_t a);
 uint16_t mmio_read16(uint32_t a);
 uint32_t mmio_read32(uint32_t a);
@@ -200,12 +208,12 @@ static inline void sh4_fsca(sh4ctx *c, int n) {
 }
 
 /* interrupt polling at loop back-edges */
-extern int sh4_poll_ctr;
+extern DC_RUNTIME_VAR int sh4_poll_ctr;
 void sh4_poll_slow(sh4ctx *c);
 #define SH4_POLL(c) do { if (--sh4_poll_ctr <= 0) sh4_poll_slow(c); } while (0)
 
 /* set before calling a function to enter it at one of its return addresses (thread resume) */
-extern uint32_t sh4_resume_pc;
+extern DC_RUNTIME_VAR uint32_t sh4_resume_pc;
 
 /* generated function declarations (in the one-click build, only the generated code sees them) */
 #ifndef DC_JIT
