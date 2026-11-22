@@ -55,6 +55,11 @@ Debug aids: `DC_TRAP_ROM=1` (SIGTRAP on BIOS-ROM reads, run under gdb), `DC_DUMP
   is the room name plus play time, e.g. `ED: HELLBILLY HOUSE 00:43:48`; the short description
   is `EVIL DEAD`. While building the list the game reads only each save's header block; it reads
   the rest when you load.
+- **Original data bug:** the game's data holds two slot-name tables ("Controller A, Slot 1"
+  in 1ST_READ.BIN and "Controller A, slot 1" in the save-screen text). In the second, the
+  "Controller C, slot 1" entry is missing: its place holds "ARCANE LIBRARY", a room name, so on
+  real hardware that screen would label a card in controller C's first slot "ARCANE LIBRARY".
+  `textpatch.c` renames it "Save Slot 5", matching it together with the entry before it.
 - **Imported saves:** saves in VMI/VMS form (the Planetweb browser's download format, used by
   emulators and save-sharing sites) go onto a card with `tools/vmu_import.py`. A Hellbilly
   House save imported this way loads into the level.
