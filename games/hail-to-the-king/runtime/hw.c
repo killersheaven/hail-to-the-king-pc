@@ -26,12 +26,20 @@ static uint64_t t0_ns;
  * interrupt poll (every 4096 loop back-edges) instead of following the host
  * clock, so scripted-input runs repeat exactly regardless of host speed. */
 uint64_t hw_vclock_ns, hw_vclock_step;
+/* DC_VCLOCK_UNTIL=<field>: run deterministically up to that field, then follow the
+ * host clock (speed tests: reach the same scene every time, then measure real time). */
 static uint64_t now_ns(void) {
-    if (hw_vclock_step) return hw_vclock_ns;
+    static long long until = -2; static uint64_t base;
+    if (hw_vclock_step) {
+        if (until == -2) until = getenv("DC_VCLOCK_UNTIL") ? atoll(getenv("DC_VCLOCK_UNTIL")) : -1;
+        if (until < 0 || hw_vclock_ns < (uint64_t)until * 16683333ull) return hw_vclock_ns;
+        hw_vclock_step = 0; base = hw_vclock_ns; t0_ns = 0;
+        fprintf(stderr, "[time] host clock from field %lld\n", until);
+    }
     struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
     uint64_t n = (uint64_t)ts.tv_sec * 1000000000ull + ts.tv_nsec;
     if (!t0_ns) t0_ns = n;
-    return n - t0_ns;
+    return n - t0_ns + base;
 }
 uint64_t hw_now_ns(void) { return now_ns(); }
 /* SH-4 peripheral clock Pφ = 50 MHz */
