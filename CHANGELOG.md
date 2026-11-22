@@ -6,6 +6,13 @@ are closed, which will be 1.0.0. The test builds before the first public release
 
 ## Unreleased
 
+- Killers' Heaven splash screen at start-up: about 3 seconds with a fade, skipped by any key,
+  button or tap (`DC_NOSPLASH=1` turns it off). It is the same screen as the Evil Dead
+  Collection's other ports, made by `tools/make_splash.py` from `assets/killers-heaven-logo.png`
+  and embedded in the program, so nothing extra ships.
+- Credit lines now read "Unofficial recompilation" (no "PC"), ready for other platforms. The HD
+  legal screen in `textures/` still shows the old wording until it is regenerated with
+  `tools/fontpack/legalpack.py`, which needs the original texture from your disc.
 - Save slots 3–6 work: the runtime now emulates controllers on ports B and C, each with two
   memory cards (`vmu_b1.bin` … `vmu_c2.bin`). A card's file is made on its first save instead
   of at start-up.

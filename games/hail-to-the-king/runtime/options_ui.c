@@ -272,7 +272,7 @@ static const char *about_text =
     "running natively on this computer through static recompilation: the game's own "
     "SH-4 machine code is translated to C ahead of time and runs on an emulation of "
     "the Dreamcast's graphics, sound and controller hardware.\n\n"
-    "Version " HTTK_VERSION ". Unofficial PC recompilation (c) 2026 Killers' Heaven, "
+    "Version " HTTK_VERSION ". Unofficial recompilation (c) 2026 Killers' Heaven, "
     "free software under the GNU GPL v3.\n\n"
     "All game content is read from your own disc image; none is included.\n\n"
     "Fonts: Courier Prime and EB Garamond (SIL Open Font License). "
@@ -581,7 +581,7 @@ static int options_window_ex(int launcher) {
                 if (on) { ui_fill(340, y - 34, 280, 44, 0x8E1F1A, 210); ui_frame(340, y - 34, 280, 44, 0xE0453B, 255); }
                 ui_text(2, 480, y, 1, on ? 0xFFFFFF : 0xD8D2C8, 255, items[i]);
             }
-            ui_text(0, 480, 700, 1, 0x8A847C, 255, "Unofficial PC recompilation (c) 2026 Killers' Heaven");
+            ui_text(0, 480, 700, 1, 0x8A847C, 255, "Unofficial recompilation (c) 2026 Killers' Heaven");
         } else if (screen == S_OPTIONS) {
             /* mouse: hover selects; a click on a row's value steps it (left half back, right half forward) */
             if (mx >= 0) {

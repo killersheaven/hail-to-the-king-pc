@@ -263,6 +263,25 @@ int platform_init(int argc, char **argv) {
         else fprintf(stderr, "[sdl] no audio device: %s\n", SDL_GetError());
     }
     for (int i = 0; i < SDL_NumJoysticks(); i++) if (SDL_IsGameController(i)) { pad = SDL_GameControllerOpen(i); break; }
+    if (!getenv("DC_NOSPLASH")) {         /* Killers' Heaven splash: ~3 s with a fade, any key or button skips */
+        Uint32 t0 = SDL_GetTicks();
+        for (int done = 0; !done; ) {
+            Uint32 ms = SDL_GetTicks() - t0;
+            SDL_Event e;
+            while (SDL_PollEvent(&e)) {
+                if (e.type == SDL_QUIT) exit(0);
+                if (e.type == SDL_KEYDOWN || e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_FINGERDOWN) done = 1;
+                if (e.type == SDL_CONTROLLERDEVICEADDED && !pad) pad = SDL_GameControllerOpen(e.cdevice.which);
+            }
+            if (ms >= 3000) break;
+            float a = ms < 400 ? ms / 400.0f : ms > 2600 ? (3000 - ms) / 400.0f : 1.0f;
+            int w, h; SDL_GL_GetDrawableSize(win, &w, &h);
+            if (!render_gl_splash_frame(a, w, h)) break;
+            SDL_GL_SwapWindow(win);
+            SDL_Delay(15);
+        }
+        render_gl_splash_frame(-1, 0, 0);
+    }
     return 1;
 }
 

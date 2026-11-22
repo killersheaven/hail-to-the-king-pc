@@ -18,7 +18,7 @@ LINES = ["Evil Dead: Hail to the King © 2000 THQ Inc.",
          "THQ and the THQ logo are trademarks and/or",
          "registered trademarks of THQ Inc.",
          "All rights reserved."]
-CREDIT = "Unofficial PC recompilation © 2026 Killers’ Heaven."
+CREDIT = "Unofficial recompilation © 2026 Killers’ Heaven."
 src = np.array(Image.open(sys.argv[1]).convert("RGBA"))
 H, W = src.shape[:2]
 out = np.repeat(np.repeat(src, S, 0), S, 1).copy()          # keeps alpha and the unused texture area
