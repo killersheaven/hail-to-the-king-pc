@@ -12,4 +12,7 @@ typedef struct {
     const fnent *resume; size_t nresume;    /* return addresses -> containing function */
     const uint32_t *baked; size_t nbaked;   /* literals baked in as constants */
 } sh4_code;
+/* 0-999 while the code is being prepared, 1000 when ready, -1 if that failed. The one-click
+ * build prepares it on a second thread while the launcher is open (runtime.c). */
+extern volatile int sh4_code_progress;
 int sh4_code_load(sh4_code *code, const char *argv0, const uint8_t *img, size_t len);   /* img: the program as on the disc */

@@ -276,6 +276,16 @@ void sh4_sq_flush(sh4ctx *c, uint32_t a) { (void)c; hw_sq_flush(a); }
 #ifdef __ANDROID__
 #include <SDL2/SDL_main.h>                   /* SDL's Java side calls SDL_main */
 #endif
+#ifdef DC_JIT
+#include <pthread.h>
+static struct { const char *argv0; uint8_t *img; size_t n; int ok; } job;
+static void *code_thread(void *arg) {
+    (void)arg;
+    job.ok = sh4_code_load(&code, job.argv0, job.img, job.n);
+    sh4_code_progress = job.ok ? 1000 : -1;
+    return NULL;
+}
+#endif
 int main(int argc, char **argv) {
     platform_prepare(&argc, &argv);
     /* hail-to-the-king <disc.cue>                 (the program is read from the disc)
@@ -299,8 +309,17 @@ int main(int argc, char **argv) {
         if (!b || sz > (16u << 20) - 0x10000) { fprintf(stderr, "cannot read 1ST_READ.BIN from %s\n", disc); return 1; }
         memcpy(dc_ram + 0x10000, b, sz); free(b); n = sz;
     }
+#ifdef DC_JIT
+    /* one-click build: translate and compile on a second thread, from a copy of the program
+     * as it is on the disc, while the launcher is open (platform_init waits for it) */
+    job.argv0 = argv[0]; job.n = n; job.img = malloc(n); memcpy(job.img, dc_ram + 0x10000, n);
+    pthread_t loader; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setstacksize(&at, 16u << 20);
+    int threaded = pthread_create(&loader, &at, code_thread, NULL) == 0;
+    if (!threaded) code_thread(NULL);
+#else
     if (!sh4_code_load(&code, argv[0], dc_ram + 0x10000, n)) { fprintf(stderr, "the translated program could not be loaded\n"); return 1; }
     fprintf(stderr, "loaded %zu bytes at 8C010000, %zu recompiled functions\n", n, sh4_fn_count);
+#endif
     { void text_patch(uint32_t a, uint32_t len); text_patch(0x8C010000u, (uint32_t)n); }   /* memory-card wording -> save slots */
     {   int disc_read_ip(uint8_t *dst32k);
         if (disc_read_ip(dc_ram + 0x8000)) fprintf(stderr, "IP.BIN: read from the disc image\n");
@@ -313,6 +332,12 @@ int main(int argc, char **argv) {
     { void hw_init(void); hw_init(); }
     if (getenv("DC_ISO_LIST")) { void iso_list(void); iso_list(); return 0; }
     if (!platform_init(argc, argv)) fprintf(stderr, "[platform] init failed; running without video\n");
+#ifdef DC_JIT
+    if (threaded) pthread_join(loader, NULL);
+    free(job.img);
+    if (!job.ok) { fprintf(stderr, "the translated program could not be loaded\n"); return 1; }
+    fprintf(stderr, "loaded %zu bytes at 8C010000, %zu recompiled functions\n", n, sh4_fn_count);
+#endif
     signal(SIGTERM, on_term); signal(SIGINT, on_term);
     static sh4ctx c;
     c.r[15] = 0x8C00F400u;

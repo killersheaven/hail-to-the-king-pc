@@ -29,6 +29,7 @@ extern int sh4_poll_ctr;
 extern uint32_t sh4_resume_pc;
 void hle_ctx_restore(sh4ctx *c);
 
+volatile int sh4_code_progress;
 static void on_error(void *opaque, const char *msg) { (void)opaque; fprintf(stderr, "[jit] %s\n", msg); }
 
 static void add_runtime_symbols(TCCState *s) {
@@ -153,6 +154,7 @@ int sh4_code_load(sh4_code *code, const char *argv0, const uint8_t *img, size_t 
     if (!rc_translate(&in, &out)) { fprintf(stderr, "[jit] translation failed\n"); return 0; }
     size_t il; int ncases; char *interp = rc_gen_interp(&il, &ncases);
     double t1 = now_s();
+    sh4_code_progress = 150;                        /* translating is ~15% of the time, compiling the rest */
     const char *dd = getenv("DC_GEN_DUMP");
     if (dd) { for (int i = 0; i < out.nfiles; i++) dump(dd, out.files[i].name, out.files[i].text, out.files[i].len); dump(dd, "interp_ops.c", interp, il); }
     /* prelude: sh4ctx.h with funcs.h pasted in */
@@ -169,6 +171,7 @@ int sh4_code_load(sh4_code *code, const char *argv0, const uint8_t *img, size_t 
     for (int i = 0; ok && i < out.nfiles; i++) {
         size_t l = strlen(out.files[i].name);
         if (l > 2 && !strcmp(out.files[i].name + l - 2, ".c")) ok = compile_text(s, prelude, plen, out.files[i].text);
+        sh4_code_progress = 150 + 800 * (i + 1) / out.nfiles;
     }
     if (ok) ok = compile_text(s, prelude, plen, interp);
 #if defined(_WIN32) && defined(__x86_64__)
