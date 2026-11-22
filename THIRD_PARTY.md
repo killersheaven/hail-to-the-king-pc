@@ -7,6 +7,7 @@
 | Courier Prime (Alan Dague-Greene) | embedded in `runtime/third_party/courierprime_ttf.h`, `tools/fontpack/` | SIL Open Font License 1.1 (`tools/fontpack/OFL.txt`) |
 | EB Garamond (Georg Duffner, Octavio Pardo) | `tools/fontpack/EBGaramond.ttf` | SIL Open Font License 1.1 (`tools/fontpack/EBGaramond-OFL.txt`) |
 | DejaVu Sans Bold (letters in the button-prompt icons, `tools/fontpack/prompticons.py`) | rendered into `textures/prompts/*/icons.png` | Bitstream Vera / DejaVu font license |
+| TinyCC (Fabrice Bellard and contributors), the one-click build's built-in compiler | `games/hail-to-the-king/third_party/tinycc/` (upstream commit in `UPSTREAM.txt`) | LGPL 2.1 or later (`third_party/tinycc/COPYING`) |
 | Khronos EGL / OpenGL ES headers | `games/hail-to-the-king/third_party/khronos/` | Apache 2.0 / MIT (see file headers) |
 
 Downloaded by the build scripts, not stored here: SDL2 (zlib license), llvm-mingw (Apache 2.0

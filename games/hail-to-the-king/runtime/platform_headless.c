@@ -48,6 +48,7 @@ static void on_render(const pvr_frame *f) {
     }
 }
 
+void platform_prepare(int *argc, char ***argv) { (void)argc; (void)argv; }
 int platform_init(int argc, char **argv) {
     (void)argc; (void)argv;
     if (getenv("DC_NOGL")) return 1;
