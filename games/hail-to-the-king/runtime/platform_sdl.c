@@ -81,7 +81,7 @@ static int find_cue(const char *dir, char *out, size_t n) {
     }
     closedir(d); return found;
 }
-void android_prepare(int *argc, char ***argv) {
+void platform_prepare(int *argc, char ***argv) {
     const char *home = SDL_AndroidGetExternalStoragePath();
     if (home) { mkdir(home, 0755); if (chdir(home) != 0) home = NULL; }
     freopen("log.txt", "w", stderr); setvbuf(stderr, NULL, _IOLBF, 0);
@@ -101,6 +101,68 @@ void android_prepare(int *argc, char ***argv) {
 }
 #else
 static void *getproc(const char *n) { return SDL_GL_GetProcAddress(n); }
+#include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#endif
+/* Started without arguments (double-clicked): work in the program's folder, log to
+ * log.txt, find the disc and open the launcher. The disc is the one remembered in
+ * disc.txt, else a .cue in this folder or up to two folders below it, else (Windows)
+ * the player picks it in a file dialog. */
+static int is_file(const char *p) { struct stat st; return stat(p, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG; }
+static int is_dir(const char *p) { struct stat st; return stat(p, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR; }
+static int search_cue(const char *dir, int depth, char *out, size_t n) {
+    DIR *d = opendir(dir); if (!d) return 0;
+    struct dirent *e; int found = 0;
+    char sub[64][512]; int ns = 0;
+    while (!found && (e = readdir(d))) {
+        if (e->d_name[0] == '.') continue;
+        char p[1024]; snprintf(p, sizeof p, "%s/%s", dir, e->d_name);
+        size_t l = strlen(e->d_name);
+        if (l > 4 && !SDL_strcasecmp(e->d_name + l - 4, ".cue") && is_file(p)) { snprintf(out, n, "%s", p); found = 1; }
+        else if (depth > 0 && ns < 64 && is_dir(p)) snprintf(sub[ns++], sizeof sub[0], "%s", p);
+    }
+    closedir(d);
+    for (int i = 0; !found && i < ns; i++) found = search_cue(sub[i], depth - 1, out, n);
+    return found;
+}
+void platform_prepare(int *argc, char ***argv) {
+    if (*argc > 1) return;                          /* the .bat files and developers pass the disc themselves */
+    char *base = SDL_GetBasePath();
+    if (base) { if (chdir(base) != 0) { /* keep the current folder */ } SDL_free(base); }
+    if (!freopen("log.txt", "w", stderr)) { /* no log */ } else setvbuf(stderr, NULL, _IOLBF, 0);
+    static char cue[1024]; int ok = 0;
+    FILE *f = fopen("disc.txt", "r");
+    if (f) {
+        if (fgets(cue, sizeof cue, f)) { cue[strcspn(cue, "\r\n")] = 0; ok = cue[0] && is_file(cue); }
+        fclose(f);
+    }
+    if (!ok) ok = search_cue(".", 2, cue, sizeof cue);
+#ifdef _WIN32
+    if (!ok) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Evil Dead: Hail to the King",
+            "Please choose your disc image: the .cue file of your Evil Dead: Hail to the King (USA) disc.\n\n"
+            "The game is made from your own disc each time it starts; nothing from the game comes with this program.", NULL);
+        OPENFILENAMEA o; memset(&o, 0, sizeof o); cue[0] = 0;
+        o.lStructSize = sizeof o; o.lpstrFilter = "Disc image (*.cue)\0*.cue\0All files\0*.*\0"; o.lpstrFile = cue; o.nMaxFile = sizeof cue;
+        o.lpstrTitle = "Your Evil Dead: Hail to the King disc (.cue)"; o.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+        ok = GetOpenFileNameA(&o) && is_file(cue);
+    }
+#endif
+    if (!ok) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Evil Dead: Hail to the King",
+            "No disc image found. Put this program's folder next to your disc image (the .cue file and its .bin files), "
+            "or start it with the .cue file as its argument.", NULL);
+        exit(0);
+    }
+    f = fopen("disc.txt", "w"); if (f) { fprintf(f, "%s\n", cue); fclose(f); }
+    fprintf(stderr, "[start] disc %s\n", cue);
+    static char *args[4]; args[0] = (*argv)[0]; args[1] = cue; args[2] = "--launcher"; args[3] = NULL;
+    *argc = 3; *argv = args;
+}
 #endif
 
 /* ---- settings.ini ---- */

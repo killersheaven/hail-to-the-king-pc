@@ -171,6 +171,12 @@ int sh4_code_load(sh4_code *code, const char *argv0, const uint8_t *img, size_t 
         if (l > 2 && !strcmp(out.files[i].name + l - 2, ".c")) ok = compile_text(s, prelude, plen, out.files[i].text);
     }
     if (ok) ok = compile_text(s, prelude, plen, interp);
+#if defined(_WIN32) && defined(__x86_64__)
+    /* TinyCC calls __chkstk for stack frames over 4 KB on Windows (its lib/chkstk.S) */
+    if (ok) ok = tcc_compile_string(s, "__asm__(\".globl __chkstk\\n__chkstk:\\n xchg (%rsp),%rbp\\n push %rbp\\n lea 8(%rsp),%rbp\\n"
+        " push %rcx\\n mov %rbp,%rcx\\n movslq %eax,%rax\\nP0:\\n sub $4096,%rcx\\n test %rax,(%rcx)\\n sub $4096,%rax\\n cmp $4096,%rax\\n"
+        " jge P0\\n sub %rax,%rcx\\n test %rax,(%rcx)\\n mov %rsp,%rax\\n mov %rcx,%rsp\\n mov (%rax),%rcx\\n jmp *8(%rax)\\n\");") >= 0;
+#endif
     int nf = out.nfiles, nfun = out.nfuncs;
     rc_free(&out); free(interp); free(prelude); free(o); free((void *)in.extra); free((void *)in.live);
     for (int i = 0; i < in.nnames; i++) free((void *)nm[i].name);
