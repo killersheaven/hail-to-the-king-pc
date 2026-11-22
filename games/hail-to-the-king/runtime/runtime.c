@@ -302,7 +302,7 @@ int main(int argc, char **argv) {
         if (!b || sz > (16u << 20) - 0x10000) { fprintf(stderr, "cannot read 1ST_READ.BIN from %s\n", disc); return 1; }
         memcpy(dc_ram + 0x10000, b, sz); free(b); n = sz;
     }
-    if (!sh4_code_load(&code, argv[0])) { fprintf(stderr, "the translated program could not be loaded\n"); return 1; }
+    if (!sh4_code_load(&code, argv[0], dc_ram + 0x10000, n)) { fprintf(stderr, "the translated program could not be loaded\n"); return 1; }
     fprintf(stderr, "loaded %zu bytes at 8C010000, %zu recompiled functions\n", n, sh4_fn_count);
     { void text_patch(uint32_t a, uint32_t len); text_patch(0x8C010000u, (uint32_t)n); }   /* memory-card wording -> save slots */
     {   int disc_read_ip(uint8_t *dst32k);
