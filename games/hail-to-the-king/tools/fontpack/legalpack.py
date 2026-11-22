@@ -18,7 +18,8 @@ LINES = ["Evil Dead: Hail to the King © 2000 THQ Inc.",
          "THQ and the THQ logo are trademarks and/or",
          "registered trademarks of THQ Inc.",
          "All rights reserved."]
-CREDIT = "Unofficial PC recompilation © 2026 Killers’ Heaven."
+CREDIT = "Unofficial recompilation © 2026 Killers’ Heaven."
+RED = (200, 24, 20)
 src = np.array(Image.open(sys.argv[1]).convert("RGBA"))
 H, W = src.shape[:2]
 out = np.repeat(np.repeat(src, S, 0), S, 1).copy()          # keeps alpha and the unused texture area
@@ -43,6 +44,7 @@ while True:
 font = load(size)
 track = (widest - font.getlength(LINES[4])) / (len(LINES[4]) - 1)
 def draw_tracked(d, cx, base, text):
+    """Draw `text` centred on cx, letter-spaced by `track`."""
     total = font.getlength(text) + track * (len(text) - 1)
     x = cx - total / 2
     for i, ch in enumerate(text):
@@ -53,12 +55,17 @@ rows = [(t, i * pitch) for i, t in enumerate(LINES)] + [(CREDIT, (len(LINES) + g
 asc = -font.getbbox(LINES[0], anchor="ls")[1]             # baseline to ink top of line 1
 img = Image.new("L", (320 * S, 240 * S), 0)
 d = ImageDraw.Draw(img)
+red = Image.new("L", (320 * S, 240 * S), 0)
 for text, dy in rows:
     base = top0 - shift + asc + dy
-    draw_tracked(d, 160 * S, base, text)
+    # our line goes on its own layer, in the red of the Killers' Heaven logo
+    draw_tracked(ImageDraw.Draw(red) if text == CREDIT else d, 160 * S, base, text)
 a = np.array(img).astype(np.float32)[..., None] / 255.0
 ink = np.array([232, 232, 228], np.float32)
 region = out[:240 * S, :320 * S, :3].astype(np.float32)
-out[:240 * S, :320 * S, :3] = (region * (1 - a) + ink * a + 0.5).astype(np.uint8)
+region = region * (1 - a) + ink * a
+r = np.array(red).astype(np.float32)[..., None] / 255.0
+region = region * (1 - r) + np.array(RED, np.float32) * r
+out[:240 * S, :320 * S, :3] = (region + 0.5).astype(np.uint8)
 Image.fromarray(out, "RGBA").save(sys.argv[3])
 print("font size %d px at %dx, tracking %.1f px, %d lines" % (size, S, track, len(rows)))

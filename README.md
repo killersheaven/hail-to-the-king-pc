@@ -1,4 +1,4 @@
-# Evil Dead: Hail to the King — PC recompilation
+# Evil Dead: Hail to the King — unofficial recompilation
 
 An unofficial native PC version of **Evil Dead: Hail to the King** (Dreamcast, 2000), made by
 *static recompilation*: the game's own SH-4 program is translated to C ahead of time and runs on
@@ -7,7 +7,7 @@ a reimplementation of the Dreamcast's graphics, sound and controller hardware.
 **No game data is included.** You build the game on your own computer from your own disc image,
 and it reads everything (models, sound, movies) from that disc while it runs.
 
-Current version: **v0.15.0** — see [CHANGELOG.md](CHANGELOG.md).
+Current version: **v0.16.0** — see [CHANGELOG.md](CHANGELOG.md).
 
 ## What you get
 

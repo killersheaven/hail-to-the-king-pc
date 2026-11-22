@@ -166,13 +166,15 @@ void platform_prepare(int *argc, char ***argv) {
 #endif
 
 /* ---- settings.ini ---- */
-static struct {
+typedef struct {
     int fullscreen, monitor, win_w, win_h;
     int render_mode;            /* 0 auto, N>0: N x 640x480, -1: fixed size */
     int render_w, render_h, stretch, ui_mode;
     int sharp, hd, prompts;     /* texture_filter, hd_textures, button_prompts */
     int cheats;                 /* bit 0 immortality, 1 ammo, 2 fuel, 3 Damascene blade */
-} cfg = { 1, 0, 1280, 960, 0, 0, 0, 0, 1, 0, 1, 0, 0 };
+} settings;
+static const settings cfg_default = { 1, 0, 1280, 960, 0, 0, 0, 0, 1, 0, 1, 0, 0 };
+static settings cfg = { 1, 0, 1280, 960, 0, 0, 0, 0, 1, 0, 1, 0, 0 };   /* = cfg_default */
 /* keyboard -> Dreamcast pad (rebindable in the options window; key_* in settings.ini) */
 enum { K_UP, K_DOWN, K_LEFT, K_RIGHT, K_A, K_B, K_X, K_Y, K_START, K_L, K_R, NKEYS };
 static const char *key_cfg[NKEYS] = { "key_up", "key_down", "key_left", "key_right", "key_a", "key_b", "key_x", "key_y", "key_start", "key_ltrigger", "key_rtrigger" };
@@ -188,9 +190,9 @@ static const char *cheat_keys[4] = { "cheat_immortality", "cheat_unlimited_ammo"
 extern int hw_cheats;
 static const char *prompt_names[4] = { "dreamcast", "xbox", "playstation", "switch" };
 static char cfg_path[1024];
-static void cfg_save(void) {
+static int cfg_save(void) {      /* 0 if settings.ini can't be written */
     FILE *f = fopen(cfg_path, "w");
-    if (!f) return;
+    if (!f) return 0;
     fprintf(f, "# Evil Dead: Hail to the King - display settings\n"
                "# display: fullscreen (uses your monitor's own resolution) or windowed\n"
                "display = %s\n"
@@ -226,7 +228,12 @@ static void cfg_save(void) {
             cfg.cheats & 1 ? "on" : "off", cfg.cheats & 2 ? "on" : "off", cfg.cheats & 4 ? "on" : "off", cfg.cheats & 8 ? "on" : "off");
     fprintf(f, "#\n# Keyboard: which key acts as each Dreamcast pad button (key names as SDL writes them)\n");
     for (int i = 0; i < NKEYS; i++) fprintf(f, "%s = %s\n", key_cfg[i], SDL_GetScancodeName(keymap[i]));
-    fclose(f);
+    return fclose(f) == 0;
+}
+/* every option and key back to its default (not saved until cfg_save) */
+static void cfg_defaults(void) {
+    cfg = cfg_default;
+    memcpy(keymap, key_default, sizeof keymap);
 }
 static void cfg_load(void) {
     char *base = SDL_GetBasePath();
@@ -234,7 +241,7 @@ static void cfg_load(void) {
     SDL_free(base);
     memcpy(keymap, key_default, sizeof keymap);
     FILE *f = fopen(cfg_path, "r");
-    if (!f) { cfg_save(); return; }
+    if (!f) { (void)cfg_save(); return; }
     char line[256];
     while (fgets(line, sizeof line, f)) {
         char k[64], v[64];
@@ -329,6 +336,25 @@ int platform_init(int argc, char **argv) {
         else fprintf(stderr, "[sdl] no audio device: %s\n", SDL_GetError());
     }
     for (int i = 0; i < SDL_NumJoysticks(); i++) if (SDL_IsGameController(i)) { pad = SDL_GameControllerOpen(i); break; }
+    if (!getenv("DC_NOSPLASH")) {         /* Killers' Heaven splash: ~3 s with a fade, any key or button skips */
+        Uint32 t0 = SDL_GetTicks();
+        for (int done = 0; !done; ) {
+            Uint32 ms = SDL_GetTicks() - t0;
+            SDL_Event e;
+            while (SDL_PollEvent(&e)) {
+                if (e.type == SDL_QUIT) exit(0);
+                if (e.type == SDL_KEYDOWN || e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_FINGERDOWN) done = 1;
+                if (e.type == SDL_CONTROLLERDEVICEADDED && !pad) pad = SDL_GameControllerOpen(e.cdevice.which);
+            }
+            if (ms >= 3000) break;
+            float a = ms < 400 ? ms / 400.0f : ms > 2600 ? (3000 - ms) / 400.0f : 1.0f;
+            int w, h; SDL_GL_GetDrawableSize(win, &w, &h);
+            if (!render_gl_splash_frame(a, w, h)) break;
+            SDL_GL_SwapWindow(win);
+            SDL_Delay(15);
+        }
+        render_gl_splash_frame(-1, 0, 0);
+    }
     return 1;
 }
 

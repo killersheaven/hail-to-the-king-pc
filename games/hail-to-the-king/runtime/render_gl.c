@@ -795,3 +795,52 @@ void render_gl_present(int win_w, int win_h) {
     p_glBlitFramebuffer(0, 0, rt_w, rt_h, x, y, x + w, y + h, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     p_glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 }
+
+/* The Killers' Heaven splash (splash_png.h, made by tools/make_splash.py),
+ * shown by the platform layer before the game starts. a is the fade, 0..1;
+ * a < 0 frees it. The picture is letterboxed to its own 16:9. */
+#include "splash_png.h"
+int render_gl_splash_frame(float a, int win_w, int win_h) {
+    static GLuint tex, rfb;
+    static unsigned char *px, *tmp;
+    static int sw, sh;
+    if (a < 0) {
+        if (px) { stbi_image_free(px); free(tmp); px = tmp = NULL; p_glDeleteTextures(1, &tex); }
+        p_glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        return 0;
+    }
+    if (!px) {
+        int n;
+        px = stbi_load_from_memory(splash_png, (int)sizeof splash_png, &sw, &sh, &n, 4);
+        if (!px) return 0;
+        tmp = malloc((size_t)sw * sh * 4);
+        p_glGenTextures(1, &tex);
+        if (!rfb) p_glGenFramebuffers(1, &rfb);
+    }
+    int k = (int)(a * 256.0f);
+    if (k < 0) k = 0;
+    if (k > 256) k = 256;
+    for (size_t i = 0, n = (size_t)sw * sh * 4; i < n; i += 4) {
+        tmp[i] = (unsigned char)((px[i] * k) >> 8);
+        tmp[i + 1] = (unsigned char)((px[i + 1] * k) >> 8);
+        tmp[i + 2] = (unsigned char)((px[i + 2] * k) >> 8);
+        tmp[i + 3] = 255;
+    }
+    p_glBindTexture(GL_TEXTURE_2D, tex);
+    p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sw, sh, 0, GL_RGBA, GL_UNSIGNED_BYTE, tmp);
+    p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    p_glBindFramebuffer(GL_READ_FRAMEBUFFER, rfb);
+    p_glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    p_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    p_glViewport(0, 0, win_w, win_h);
+    p_glClearColor(0, 0, 0, 1); p_glClear(GL_COLOR_BUFFER_BIT);
+    int w = win_w, h = win_w * sh / sw;
+    if (h > win_h) { h = win_h; w = win_h * sw / sh; }
+    int x = (win_w - w) / 2, y = (win_h - h) / 2;
+    /* rows were uploaded top first: blit upside down to show them upright */
+    p_glBlitFramebuffer(0, 0, sw, sh, x, y + h, x + w, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    p_glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    return 1;
+}
+

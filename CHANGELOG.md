@@ -4,8 +4,22 @@ Version numbers: `0.<build>.<fix>` until a complete playthrough is verified and 
 are closed, which will be 1.0.0. The test builds before the first public release were numbered
 1–14, so the first release is 0.14.0.
 
-## Unreleased
+## v0.16.0 — pre-release (2026-11-22)
 
+- The launcher is now the Evil Dead Collection's shared launcher (`kh-launcher/`, the same
+  module as Fistful of Boomstick's), so both games look and work the same. Options are on
+  three pages (Display, Controls, Cheats) with a new Defaults button; the button-prompt preview
+  sits on the Controls page; Extras keep Documents, Cutscenes and Models. Each game ships its
+  own copy of the module, so neither needs the other installed. `options.bat` now opens the
+  launcher on its Options screen. Test hooks are `KHL_KEYS` / `KHL_SHOT` (were
+  `DC_OPTIONS_KEYS` / `DC_OPTIONS_SHOT`).
+- Killers' Heaven splash screen at start-up: about 3 seconds with a fade, skipped by any key,
+  button or tap (`DC_NOSPLASH=1` turns it off). It is the same screen as the Evil Dead
+  Collection's other ports, made by `tools/make_splash.py` from `assets/killers-heaven-logo.png`
+  and embedded in the program, so nothing extra ships.
+- Credit lines now read "Unofficial recompilation" (no "PC"), ready for other platforms. The HD
+  legal screen in `textures/` is regenerated with the new wording, and our credit line on it is
+  red, matching Fistful of Boomstick's legal screen.
 - Saving: Save Slots 1 and 2 are the two memory cards (`vmu_a1.bin`, `vmu_a2.bin`), and each
   holds up to eight saves, so sixteen in all. A card's file is made on its first save instead
   of at start-up.
